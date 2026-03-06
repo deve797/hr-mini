@@ -1,7 +1,72 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 import styles from "./page.module.css";
 
+type Profile = { role: string | null; store_id: string | null } | null;
+
 export default function Home() {
+  const router = useRouter();
+  const [profile, setProfile] = useState<Profile>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData?.user ?? null;
+      if (!user) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      const { data: profileData } = await supabase
+        .from("users_profile")
+        .select("role, store_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      setProfile(
+        profileData
+          ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null }
+          : null
+      );
+      setLoading(false);
+    })();
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.refresh();
+    setProfile(null);
+  };
+
+  const role = profile?.role ?? null;
+  const isStoreManager = role === "store_manager" && !!profile?.store_id;
+  const isHq = role === "hq";
+
+  const navLinks: { href: string; label: string; show: boolean }[] = [
+    { href: "/insurance-request", label: "投保申请（店长）", show: isStoreManager },
+    { href: "/insurance", label: "投保处理（总部）", show: isHq },
+    { href: "/employees/new", label: "员工入职", show: isStoreManager },
+    { href: "/workdays", label: "工作天数", show: isStoreManager },
+    { href: "/payroll", label: "薪酬", show: isHq },
+  ].filter((item) => item.show);
+
+  if (loading) {
+    return (
+      <div className={styles.page}>
+        <main className={styles.main}>
+          <div className={styles.intro}>
+            <h1>HR Mini</h1>
+            <p className="muted-text">加载中…</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
@@ -10,27 +75,24 @@ export default function Home() {
           <p>请选择入口：</p>
         </div>
         <nav className={styles.nav}>
-          <Link href="/login" className={styles.primary}>
-            登录
-          </Link>
-          <Link href="/me" className={styles.secondary}>
-            我是谁
-          </Link>
-          <Link href="/insurance-request" className={styles.secondary}>
-            投保申请（店长）
-          </Link>
-          <Link href="/insurance" className={styles.secondary}>
-            投保处理（总部）
-          </Link>
-          <Link href="/employees/new" className={styles.secondary}>
-            员工入职
-          </Link>
-          <Link href="/workdays" className={styles.secondary}>
-            工作天数
-          </Link>
-          <Link href="/payroll" className={styles.secondary}>
-            薪酬
-          </Link>
+          {profile ? (
+            <>
+              {navLinks.map((item) => (
+                <Link key={item.href} href={item.href}>
+                  {item.label}
+                </Link>
+              ))}
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className={styles.navButton}
+              >
+                退出
+              </button>
+            </>
+          ) : (
+            <Link href="/login">登录</Link>
+          )}
         </nav>
       </main>
     </div>

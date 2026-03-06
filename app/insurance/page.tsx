@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import styles from "./insurance.module.css";
 
 type Profile = { role: string | null; store_id: string | null } | null;
 
 type EmployeeInfo = {
   name?: string | null;
+  emp_no?: string | null;
   hire_date?: string | null;
   phone?: string | null;
   id_card?: string | null;
@@ -35,7 +37,8 @@ function getEmployee(row: RequestRow): EmployeeInfo | null {
 
 function getEmployeeName(row: RequestRow): string {
   const e = getEmployee(row);
-  return e?.name ?? "(未知)";
+  const n = e?.name ?? "(未知)";
+  return e?.emp_no ? `${n} (${e.emp_no})` : n;
 }
 
 function getStoreName(row: RequestRow): string {
@@ -83,7 +86,7 @@ export default function InsurancePage() {
     if (!isHq) return;
     const { data, error } = await supabase
       .from("insurance_requests")
-      .select("id, employee_id, store_id, status, note, created_at, employees(name, hire_date, phone, id_card, id_number), stores(name)")
+      .select("id, employee_id, store_id, status, note, created_at, employees(name, emp_no, hire_date, phone, id_card, id_number), stores(name)")
       .eq("status", statusFilter)
       .order("created_at", { ascending: false });
     if (!error && data) setRequests((data as unknown as RequestRow[]) ?? []);
@@ -217,41 +220,41 @@ export default function InsurancePage() {
 
   if (loading) {
     return (
-      <main className="ins-page">
-        <h1 className="ins-title">总部 · 投保处理</h1>
-        <p className="ins-muted">加载中...</p>
+      <main className={styles.page}>
+        <h1 className={styles.title}>总部 · 投保处理</h1>
+        <p className={styles.muted}>加载中...</p>
       </main>
     );
   }
 
   if (!profile) {
     return (
-      <main className="ins-page">
-        <h1 className="ins-title">总部 · 投保处理</h1>
-        <p className="ins-muted">请先登录</p>
+      <main className={styles.page}>
+        <h1 className={styles.title}>总部 · 投保处理</h1>
+        <p className={styles.muted}>请先登录</p>
       </main>
     );
   }
 
   if (!isHq) {
     return (
-      <main className="ins-page">
-        <h1 className="ins-title">总部 · 投保处理</h1>
-        <p className="ins-no-access">无权限</p>
+      <main className={styles.page}>
+        <h1 className={styles.title}>总部 · 投保处理</h1>
+        <p className={styles.noAccess}>无权限</p>
       </main>
     );
   }
 
   return (
-    <main className="ins-page">
-      <h1 className="ins-title">总部 · 投保处理</h1>
+    <main className={styles.page}>
+      <h1 className={styles.title}>总部 · 投保处理</h1>
 
-      <div className="ins-tabs">
+      <div className={styles.tabs}>
         {statusTabs.map((tab) => (
           <button
             key={tab}
             type="button"
-            className={`ins-tab ${statusFilter === tab ? "ins-tab-active" : ""}`}
+            className={statusFilter === tab ? `${styles.tab} ${styles.tabActive}` : styles.tab}
             onClick={() => setStatusFilter(tab)}
           >
             {tab === "pending" ? "待处理" : tab === "approved" ? "已通过" : "已拒绝"}
@@ -259,7 +262,7 @@ export default function InsurancePage() {
         ))}
         <button
           type="button"
-          className="ins-tab ins-tab-export"
+          className={`${styles.tab} ${styles.tabExport}`}
           onClick={exportToExcel}
           disabled={requests.length === 0}
         >
@@ -268,34 +271,34 @@ export default function InsurancePage() {
       </div>
 
       {statusFilter === "pending" && !selectedRequest && (
-        <section className="ins-list">
-          <h2 className="ins-section-title">待处理申请</h2>
+        <section className={styles.list}>
+          <h2 className={styles.sectionTitle}>待处理申请</h2>
           {requests.length === 0 ? (
-            <p className="ins-muted">暂无待处理申请</p>
+            <p className={styles.muted}>暂无待处理申请</p>
           ) : (
-            <ul className="ins-request-list">
+            <ul className={styles.requestList}>
               {requests.map((r) => {
                 const emp = getEmployee(r);
                 return (
-                <li key={r.id} className="ins-request-item">
-                  <div className="ins-row-main">
-                    <span className="ins-emp-name">{getEmployeeName(r)}</span>
-                    <span className="ins-store">{getStoreName(r)}</span>
+                <li key={r.id} className={styles.requestItem}>
+                  <div className={styles.rowMain}>
+                    <span className={styles.empName}>{getEmployeeName(r)}</span>
+                    <span className={styles.store}>{getStoreName(r)}</span>
                   </div>
-                  <div className="ins-employee-info">
+                  <div className={styles.employeeInfo}>
                     <span>入职日期：{emp?.hire_date ?? "—"}</span>
                     <span>电话：{emp?.phone ?? "—"}</span>
                     <span>身份证：{emp?.id_card ?? emp?.id_number ?? "—"}</span>
                   </div>
-                  <span className="ins-time">
+                  <span className={styles.time}>
                     {new Date(r.created_at).toLocaleString("zh-CN")}
                   </span>
                   {r.note && (
-                    <span className="ins-note">备注：{r.note}</span>
+                    <span className={styles.note}>备注：{r.note}</span>
                   )}
                   <button
                     type="button"
-                    className="ins-btn-primary"
+                    className={styles.btnPrimary}
                     onClick={() => openForm(r)}
                   >
                     标记已购买并录入保单
@@ -309,19 +312,19 @@ export default function InsurancePage() {
       )}
 
       {statusFilter !== "pending" && (
-        <section className="ins-list">
-          <h2 className="ins-section-title">
+        <section className={styles.list}>
+          <h2 className={styles.sectionTitle}>
             {statusFilter === "approved" ? "已通过" : "已拒绝"}记录
           </h2>
-          <ul className="ins-request-list">
+          <ul className={styles.requestList}>
               {requests.map((r) => (
-                <li key={r.id} className="ins-request-item ins-request-item-readonly">
-                  <span className="ins-emp-name">{getEmployeeName(r)}</span>
-                  <span className="ins-store">{getStoreName(r)}</span>
-                  <span className="ins-time">
+                <li key={r.id} className={`${styles.requestItem} ${styles.requestItemReadonly}`}>
+                  <span className={styles.empName}>{getEmployeeName(r)}</span>
+                  <span className={styles.store}>{getStoreName(r)}</span>
+                  <span className={styles.time}>
                     {new Date(r.created_at).toLocaleString("zh-CN")}
                   </span>
-                  {r.note && <span className="ins-note">备注：{r.note}</span>}
+                  {r.note && <span className={styles.note}>备注：{r.note}</span>}
                 </li>
               ))}
           </ul>
@@ -329,81 +332,81 @@ export default function InsurancePage() {
       )}
 
       {selectedRequest && (
-        <section className="ins-form-section">
-          <h2 className="ins-section-title">
+        <section className={styles.formSection}>
+          <h2 className={styles.sectionTitle}>
             录入保单 · {getEmployeeName(selectedRequest)}
           </h2>
-          <div className="ins-form">
-            <div className="ins-field">
+          <div className={styles.form}>
+            <div className={styles.field}>
               <label htmlFor="policy_no">保单号（可选）</label>
               <input
                 id="policy_no"
                 type="text"
                 value={policyNo}
                 onChange={(e) => setPolicyNo(e.target.value)}
-                className="ins-input"
+                className={styles.input}
                 placeholder="保单号"
               />
             </div>
-            <div className="ins-field">
+            <div className={styles.field}>
               <label htmlFor="insurer">承保方（可选）</label>
               <input
                 id="insurer"
                 type="text"
                 value={insurer}
                 onChange={(e) => setInsurer(e.target.value)}
-                className="ins-input"
+                className={styles.input}
                 placeholder="承保方"
               />
             </div>
-            <div className="ins-field">
+            <div className={styles.field}>
               <label htmlFor="start_date">起保日期 *</label>
               <input
                 id="start_date"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="ins-input"
+                className={styles.input}
               />
             </div>
-            <div className="ins-field">
+            <div className={styles.field}>
               <label htmlFor="end_date">止保日期 *</label>
               <input
                 id="end_date"
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="ins-input"
+                className={styles.input}
               />
             </div>
-            <div className="ins-field">
+            <div className={styles.field}>
               <label htmlFor="policy_status">状态</label>
               <select
                 id="policy_status"
                 value={policyStatus}
                 onChange={(e) => setPolicyStatus(e.target.value)}
-                className="ins-input"
+                className={styles.input}
               >
                 <option value="active">生效中</option>
                 <option value="expired">已过期</option>
                 <option value="cancelled">已取消</option>
               </select>
             </div>
-            <div className="ins-field">
+            <div className={styles.field}>
               <label htmlFor="policy_note">备注（可选）</label>
               <textarea
                 id="policy_note"
                 value={policyNote}
                 onChange={(e) => setPolicyNote(e.target.value)}
-                className="ins-input ins-textarea"
+                className={`${styles.input} ${styles.textarea}`}
                 rows={2}
                 placeholder="备注"
               />
             </div>
-            <div className="ins-form-actions">
+            <div className={styles.formActions}>
               <button
                 type="button"
-                className="ins-btn-secondary"
+                className={styles.btnSecondary}
                 onClick={closeForm}
                 disabled={submitting}
               >
@@ -411,7 +414,7 @@ export default function InsurancePage() {
               </button>
               <button
                 type="button"
-                className="ins-btn-primary"
+                className={styles.btnPrimary}
                 onClick={handleSavePolicy}
                 disabled={submitting}
               >
@@ -419,189 +422,11 @@ export default function InsurancePage() {
               </button>
             </div>
             {submitMsg && (
-              <p className="ins-success">{submitMsg}</p>
+              <p className={styles.success}>{submitMsg}</p>
             )}
           </div>
         </section>
       )}
-
-      <style jsx>{`
-        .ins-page {
-          padding: 16px;
-          max-width: 520px;
-          margin: 0 auto;
-          font-family: system-ui, sans-serif;
-        }
-        .ins-title {
-          font-size: 1.25rem;
-          font-weight: 700;
-          margin: 0 0 16px 0;
-        }
-        .ins-muted {
-          color: #666;
-          font-size: 0.875rem;
-          margin: 0;
-        }
-        .ins-no-access {
-          color: #c00;
-          font-weight: 600;
-          margin: 12px 0 0 0;
-        }
-        .ins-tabs {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 16px;
-        }
-        .ins-tab {
-          padding: 8px 14px;
-          border: 1px solid #ddd;
-          border-radius: 8px;
-          background: #fff;
-          font-size: 0.875rem;
-          cursor: pointer;
-        }
-        .ins-tab-active {
-          background: #333;
-          color: #fff;
-          border-color: #333;
-        }
-        .ins-tab-export {
-          margin-left: auto;
-        }
-        .ins-tab-export:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        .ins-section-title {
-          font-size: 1rem;
-          font-weight: 600;
-          margin: 0 0 10px 0;
-        }
-        .ins-list {
-          margin-bottom: 20px;
-        }
-        .ins-request-list {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-        }
-        .ins-request-item {
-          padding: 12px;
-          border: 1px solid #eee;
-          border-radius: 8px;
-          margin-bottom: 8px;
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px 12px;
-          align-items: baseline;
-        }
-        .ins-request-item-readonly {
-          background: #fafafa;
-        }
-        .ins-row-main {
-          display: flex;
-          align-items: baseline;
-          gap: 8px;
-          width: 100%;
-        }
-        .ins-emp-name {
-          font-weight: 600;
-          flex: 0 0 auto;
-        }
-        .ins-store {
-          font-size: 0.875rem;
-          color: #555;
-        }
-        .ins-employee-info {
-          width: 100%;
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          font-size: 0.8125rem;
-          color: #444;
-        }
-        .ins-employee-info span {
-          display: block;
-        }
-        .ins-time {
-          font-size: 0.8125rem;
-          color: #666;
-          flex: 0 0 auto;
-        }
-        .ins-note {
-          width: 100%;
-          font-size: 0.8125rem;
-          color: #666;
-        }
-        .ins-btn-primary {
-          padding: 8px 14px;
-          border-radius: 8px;
-          border: 1px solid #333;
-          background: #333;
-          color: #fff;
-          font-size: 0.875rem;
-          font-weight: 600;
-          cursor: pointer;
-        }
-        .ins-btn-primary:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-        .ins-form-section {
-          border-top: 1px solid #eee;
-          padding-top: 16px;
-        }
-        .ins-form {
-          margin-top: 8px;
-        }
-        .ins-field {
-          margin-bottom: 12px;
-        }
-        .ins-field label {
-          display: block;
-          font-size: 0.875rem;
-          margin-bottom: 4px;
-          color: #333;
-        }
-        .ins-input {
-          width: 100%;
-          padding: 10px 12px;
-          border: 1px solid #ddd;
-          border-radius: 8px;
-          font-size: 1rem;
-          box-sizing: border-box;
-        }
-        .ins-textarea {
-          resize: vertical;
-          min-height: 56px;
-        }
-        .ins-form-actions {
-          display: flex;
-          gap: 12px;
-          margin-top: 16px;
-        }
-        .ins-btn-secondary {
-          padding: 10px 16px;
-          border-radius: 8px;
-          border: 1px solid #ddd;
-          background: #fff;
-          font-size: 1rem;
-          cursor: pointer;
-        }
-        .ins-btn-secondary:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-        .ins-form-actions .ins-btn-primary {
-          padding: 10px 16px;
-          font-size: 1rem;
-        }
-        .ins-success {
-          color: #0a0;
-          font-size: 0.875rem;
-          margin: 12px 0 0 0;
-        }
-      `}</style>
     </main>
   );
 }

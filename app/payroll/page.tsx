@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import styles from "./payroll.module.css";
 
 type Employee = {
   id: string;
@@ -11,7 +12,7 @@ type Employee = {
 
 type PayrollMonthRow = {
   id: string;
-  month: string; // date
+  month: string;
   employee_id: string;
   total_days: number;
   gross_total: number;
@@ -37,8 +38,6 @@ type Store = {
 };
 
 function monthStartISO(input: string) {
-  // input is 'YYYY-MM-DD' from <input type="date">
-  // we just trust user will pick first day of month; if not, we normalize.
   const d = new Date(input);
   if (Number.isNaN(d.getTime())) return "";
   const yyyy = d.getFullYear();
@@ -207,111 +206,81 @@ export default function PayrollPage() {
   };
 
   return (
-    <main style={{ padding: 24, fontFamily: "system-ui" }}>
-      <h1 style={{ fontSize: 20, fontWeight: 800 }}>工资与分摊（财务）</h1>
+    <main className={`page-container ${styles.wrap}`}>
+      <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>
+        工资与分摊（财务）
+      </h1>
 
-      <div style={{ marginTop: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 12, color: "#666" }}>月份（选择任意日期会自动归一到当月1号）</div>
+      <div className={styles.toolbar}>
+        <div className="field">
+          <label className="field-label">月份（选择任意日期会自动归一到当月1号）</label>
           <input
             type="date"
             value={month}
             onChange={(e) => setMonth(monthStartISO(e.target.value))}
-            style={{ padding: 10, border: "1px solid #ddd", borderRadius: 10 }}
+            className="input"
+            style={{ width: "auto", minWidth: "10rem" }}
           />
         </div>
-
-        <button
-          onClick={runPayroll}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 12,
-            border: "1px solid #ddd",
-            background: "#fff",
-            fontWeight: 700,
-            height: 42,
-            alignSelf: "end",
-          }}
-        >
+        <button type="button" onClick={runPayroll} className="btn btn-outline">
           运行工资计算（含分摊）
         </button>
         <button
+          type="button"
           onClick={lockPayrollMonth}
           disabled={!month}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 12,
-            border: "1px solid #ddd",
-            background: "#fff",
-            fontWeight: 700,
-            height: 42,
-            alignSelf: "end",
-            cursor: month ? "pointer" : "not-allowed",
-            opacity: month ? 1 : 0.6,
-          }}
+          className="btn btn-outline"
         >
           锁定本月（不可修改）
         </button>
       </div>
 
-      {msg ? <div style={{ marginTop: 12, fontSize: 14 }}>{msg}</div> : null}
+      {msg ? <p className="muted-text" style={{ marginTop: "0.75rem" }}>{msg}</p> : null}
 
-      <section style={{ marginTop: 18 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 800 }}>工资总表 payroll_month</h2>
-        <div style={{ fontSize: 12, color: "#666", marginTop: 6 }}>
+      <section style={{ marginTop: "1.25rem" }}>
+        <h2 className="heading-2" style={{ marginBottom: "0.375rem" }}>
+          工资总表 payroll_month
+        </h2>
+        <p className="field-hint" style={{ marginBottom: "0.5rem" }}>
           说明：你可以先手录绩效/奖金/调整项，保存后再点“运行工资计算”让总额与门店分摊更新。
-        </div>
+        </p>
 
-        <div style={{ overflowX: "auto", marginTop: 10 }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              minWidth: 980,
-              border: "1px solid #eee",
-            }}
-          >
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
             <thead>
-              <tr style={{ background: "#fafafa" }}>
-                <th style={th}>员工</th>
-                <th style={th}>天数</th>
-                <th style={th}>总工资</th>
-                <th style={th}>绩效(手录)</th>
-                <th style={th}>奖金(手录)</th>
-                <th style={th}>调整(手录)</th>
-                <th style={th}>状态</th>
-                <th style={th}>操作</th>
+              <tr>
+                <th className={styles.th}>员工</th>
+                <th className={styles.th}>天数</th>
+                <th className={styles.th}>总工资</th>
+                <th className={styles.th}>绩效(手录)</th>
+                <th className={styles.th}>奖金(手录)</th>
+                <th className={styles.th}>调整(手录)</th>
+                <th className={styles.th}>状态</th>
+                <th className={styles.th}>操作</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td style={td} colSpan={8}>
+                  <td className={styles.td} colSpan={8}>
                     本月暂无工资数据。你可以先录入 workdays，然后点“运行工资计算”生成。
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.id} style={{ borderTop: "1px solid #eee" }}>
-                    <td style={td}>
+                  <tr key={r.id}>
+                    <td className={styles.td}>
                       <button
+                        type="button"
                         onClick={() => selectEmployee(r.employee_id)}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          textDecoration: "underline",
-                          cursor: "pointer",
-                          padding: 0,
-                          fontWeight: 700,
-                        }}
+                        className={styles.linkBtn}
                       >
                         {empName(r.employee_id)}
                       </button>
                     </td>
-                    <td style={td}>{r.total_days}</td>
-                    <td style={td}>{Number(r.gross_total).toFixed(2)}</td>
-
-                    <td style={td}>
+                    <td className={styles.td}>{r.total_days}</td>
+                    <td className={styles.td}>{Number(r.gross_total).toFixed(2)}</td>
+                    <td className={styles.td}>
                       <input
                         type="number"
                         value={r.performance_manual}
@@ -319,19 +288,19 @@ export default function PayrollPage() {
                         onChange={(e) =>
                           updateRow(r.id, { performance_manual: Number(e.target.value) })
                         }
-                        style={input}
+                        className={styles.numInput}
                       />
                     </td>
-                    <td style={td}>
+                    <td className={styles.td}>
                       <input
                         type="number"
                         value={r.bonus_manual}
                         disabled={r.status === "locked"}
                         onChange={(e) => updateRow(r.id, { bonus_manual: Number(e.target.value) })}
-                        style={input}
+                        className={styles.numInput}
                       />
                     </td>
-                    <td style={td}>
+                    <td className={styles.td}>
                       <input
                         type="number"
                         value={r.adjustment_manual}
@@ -339,23 +308,16 @@ export default function PayrollPage() {
                         onChange={(e) =>
                           updateRow(r.id, { adjustment_manual: Number(e.target.value) })
                         }
-                        style={input}
+                        className={styles.numInput}
                       />
                     </td>
-
-                    <td style={td}>{r.status}</td>
-
-                    <td style={td}>
+                    <td className={styles.td}>{r.status}</td>
+                    <td className={styles.td}>
                       <button
+                        type="button"
                         onClick={() => saveManual(r)}
                         disabled={r.status === "locked"}
-                        style={{
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid #ddd",
-                          background: "#fff",
-                          cursor: r.status === "locked" ? "not-allowed" : "pointer",
-                        }}
+                        className="btn btn-outline btn-sm"
                       >
                         保存手录
                       </button>
@@ -368,53 +330,48 @@ export default function PayrollPage() {
         </div>
       </section>
 
-      <section style={{ marginTop: 22 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 800 }}>门店分摊 payroll_store_split</h2>
-        <div style={{ fontSize: 12, color: "#666", marginTop: 6 }}>
+      <section style={{ marginTop: "1.5rem" }}>
+        <h2 className="heading-2" style={{ marginBottom: "0.375rem" }}>
+          门店分摊 payroll_store_split
+        </h2>
+        <p className="field-hint" style={{ marginBottom: "0.5rem" }}>
           点击上面员工姓名可查看该员工在各门店的分摊明细。
-        </div>
+        </p>
 
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: "0.5rem" }}>
           {selectedEmployee ? (
-            <div style={{ fontWeight: 800 }}>
+            <p style={{ fontWeight: 700 }}>
               当前查看：{selectedEmployee.name}（{selectedEmployee.emp_no}）
-            </div>
+            </p>
           ) : (
-            <div style={{ color: "#666" }}>未选择员工</div>
+            <p className="muted-text">未选择员工</p>
           )}
         </div>
 
-        <div style={{ overflowX: "auto", marginTop: 10 }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              minWidth: 760,
-              border: "1px solid #eee",
-            }}
-          >
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
             <thead>
-              <tr style={{ background: "#fafafa" }}>
-                <th style={th}>门店</th>
-                <th style={th}>天数</th>
-                <th style={th}>比例</th>
-                <th style={th}>分摊金额</th>
+              <tr>
+                <th className={styles.th}>门店</th>
+                <th className={styles.th}>天数</th>
+                <th className={styles.th}>比例</th>
+                <th className={styles.th}>分摊金额</th>
               </tr>
             </thead>
             <tbody>
               {splits.length === 0 ? (
                 <tr>
-                  <td style={td} colSpan={4}>
+                  <td className={styles.td} colSpan={4}>
                     暂无分摊数据（先点上面的员工，或先运行一次“工资计算（含分摊）”）。
                   </td>
                 </tr>
               ) : (
                 splits.map((s) => (
-                  <tr key={s.id} style={{ borderTop: "1px solid #eee" }}>
-                    <td style={td}>{storeName(s.store_id)}</td>
-                    <td style={td}>{s.workdays}</td>
-                    <td style={td}>{Number(s.ratio).toFixed(6)}</td>
-                    <td style={td}>{Number(s.store_total).toFixed(2)}</td>
+                  <tr key={s.id}>
+                    <td className={styles.td}>{storeName(s.store_id)}</td>
+                    <td className={styles.td}>{s.workdays}</td>
+                    <td className={styles.td}>{Number(s.ratio).toFixed(6)}</td>
+                    <td className={styles.td}>{Number(s.store_total).toFixed(2)}</td>
                   </tr>
                 ))
               )}
@@ -423,29 +380,9 @@ export default function PayrollPage() {
         </div>
       </section>
 
-      <div style={{ marginTop: 18, fontSize: 12, color: "#666" }}>
+      <p className="field-hint" style={{ marginTop: "1rem" }}>
         提示：如果某些表因为 RLS 导致读取失败，你会在页面看到错误信息。我们下一步会统一配置最小可用的权限策略。
-      </div>
+      </p>
     </main>
   );
 }
-
-const th: React.CSSProperties = {
-  textAlign: "left",
-  fontSize: 12,
-  padding: "10px 10px",
-  borderBottom: "1px solid #eee",
-};
-
-const td: React.CSSProperties = {
-  fontSize: 13,
-  padding: "10px 10px",
-  verticalAlign: "middle",
-};
-
-const input: React.CSSProperties = {
-  width: 120,
-  padding: 8,
-  border: "1px solid #ddd",
-  borderRadius: 10,
-};

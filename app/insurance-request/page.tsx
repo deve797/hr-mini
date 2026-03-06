@@ -55,7 +55,6 @@ export default function InsuranceRequestPage() {
       .order("name");
 
     if (error) {
-      // TODO: 若 employees 表没有 current_store_id 字段，当前已回退为全量；请补充该字段或改用 home_store_id 后移除此回退逻辑
       setEmployeesError(error.message);
       const { data: fallback } = await supabase
         .from("employees")
@@ -155,66 +154,75 @@ export default function InsuranceRequestPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen p-4 max-w-lg mx-auto font-sans">
-        <h1 className="text-xl font-bold mb-3">投保申请</h1>
-        <p className="text-gray-500 text-sm">加载中...</p>
+      <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>投保申请</h1>
+        <p className="muted-text">加载中...</p>
       </main>
     );
   }
 
   if (!profile && !profileError) {
     return (
-      <main className="min-h-screen p-4 max-w-lg mx-auto font-sans">
-        <h1 className="text-xl font-bold mb-3">投保申请</h1>
-        <p className="text-gray-500 text-sm">请先登录</p>
+      <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>投保申请</h1>
+        <p className="muted-text">请先登录</p>
       </main>
     );
   }
 
   if (!isStoreManager) {
     return (
-      <main className="min-h-screen p-4 max-w-lg mx-auto font-sans">
-        <h1 className="text-xl font-bold mb-3">投保申请</h1>
-        <p className="text-red-600 font-semibold mt-2">无权限</p>
+      <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>投保申请</h1>
+        <p className="msg-error" style={{ marginTop: "0.5rem" }}>无权限</p>
         <Link
           href="/me"
-          className="inline-block mt-3 text-blue-600 underline text-sm"
+          className="btn btn-ghost btn-sm"
+          style={{ marginTop: "1rem", display: "inline-flex" }}
         >
           返回 /me
         </Link>
         {profileError && (
-          <p className="mt-2 text-red-600 text-sm">users_profile: {profileError}</p>
+          <p className="msg-error" style={{ marginTop: "0.5rem" }}>users_profile: {profileError}</p>
         )}
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen p-4 max-w-lg mx-auto font-sans">
-      <h1 className="text-xl font-bold mb-3">投保申请</h1>
+    <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+      <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>投保申请</h1>
 
-      <section className="mb-5 p-3 bg-gray-50 rounded-lg text-sm text-gray-700 space-y-1">
-        <p><strong>email:</strong> {email ?? "—"}</p>
-        <p><strong>user_id:</strong> {userId ?? "—"}</p>
-        <p><strong>role:</strong> {profile?.role ?? "—"}</p>
-        <p><strong>store_id:</strong> {storeId ?? "—"}</p>
+      <section className="card" style={{ padding: "1rem", marginBottom: "1.5rem" }}>
+        <p className="body-text muted-text" style={{ marginBottom: "0.25rem" }}>
+          <strong>email:</strong> {email ?? "—"}
+        </p>
+        <p className="body-text muted-text" style={{ marginBottom: "0.25rem" }}>
+          <strong>user_id:</strong> {userId ?? "—"}
+        </p>
+        <p className="body-text muted-text" style={{ marginBottom: "0.25rem" }}>
+          <strong>role:</strong> {profile?.role ?? "—"}
+        </p>
+        <p className="body-text muted-text">
+          <strong>store_id:</strong> {storeId ?? "—"}
+        </p>
         {profileError && (
-          <p className="text-red-600 mt-1">users_profile: {profileError}</p>
+          <p className="msg-error" style={{ marginTop: "0.5rem" }}>users_profile: {profileError}</p>
         )}
       </section>
 
-      <section className="mb-6">
-        <h2 className="text-base font-semibold mb-2">提交申请</h2>
-        <div className="space-y-3">
-          <div>
-            <label htmlFor="emp" className="block text-sm font-medium text-gray-700 mb-1">
+      <section style={{ marginBottom: "1.5rem" }}>
+        <h2 className="heading-2" style={{ marginBottom: "0.5rem" }}>提交申请</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div className="field">
+            <label htmlFor="emp" className="field-label">
               选择员工 *
             </label>
             <select
               id="emp"
               value={selectedEmployeeId}
               onChange={(e) => setSelectedEmployeeId(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-base touch-manipulation"
+              className="input"
               aria-label="选择员工"
               disabled={employeesLoading}
             >
@@ -228,11 +236,11 @@ export default function InsuranceRequestPage() {
               ))}
             </select>
             {employeesError && (
-              <p className="mt-1 text-amber-700 text-sm">员工列表：{employeesError}（已回退为全量）</p>
+              <p className="field-hint msg-error">员工列表：{employeesError}（已回退为全量）</p>
             )}
           </div>
-          <div>
-            <label htmlFor="note" className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="field">
+            <label htmlFor="note" className="field-label">
               备注（可选）
             </label>
             <textarea
@@ -240,56 +248,67 @@ export default function InsuranceRequestPage() {
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="备注"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-base min-h-[56px] resize-y"
+              className="input"
               rows={2}
+              style={{ minHeight: "3.5rem" }}
             />
           </div>
           <button
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="w-full py-3 px-4 rounded-lg bg-gray-900 text-white font-semibold text-base touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
+            className="btn btn-primary"
+            style={{ width: "100%" }}
           >
             {submitting ? "提交中…" : "提交投保申请"}
           </button>
           {submitMsg && (
-            <p className={submitMsg === "已提交申请" ? "text-green-700 text-sm" : "text-red-600 text-sm"}>
+            <p className={submitMsg === "已提交申请" ? "msg-success" : "msg-error"} style={{ marginTop: "0.25rem" }}>
               {submitMsg}
             </p>
           )}
         </div>
       </section>
 
-      <section className="pt-4 border-t border-gray-200">
-        <h2 className="text-base font-semibold mb-2">本门店申请记录</h2>
+      <section style={{ paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
+        <h2 className="heading-2" style={{ marginBottom: "0.5rem" }}>本门店申请记录</h2>
         {requestsLoading ? (
-          <p className="text-gray-500 text-sm">加载中...</p>
+          <p className="muted-text">加载中...</p>
         ) : requests.length === 0 ? (
-          <p className="text-gray-500 text-sm">暂无申请记录</p>
+          <p className="muted-text">暂无申请记录</p>
         ) : (
-          <ul className="space-y-2 list-none p-0 m-0">
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {requests.map((r) => (
               <li
                 key={r.id}
-                className="p-3 border border-gray-200 rounded-lg flex flex-wrap gap-x-2 gap-y-1 items-baseline"
+                className="card"
+                style={{
+                  padding: "0.75rem 1rem",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.25rem 0.5rem",
+                  alignItems: "center",
+                }}
               >
-                <span className="font-semibold">{getEmployeeName(r)}</span>
+                <span style={{ fontWeight: 600 }}>{getEmployeeName(r)}</span>
                 <span
-                  className={`text-xs px-2 py-0.5 rounded ${
-                    r.status === "pending"
-                      ? "bg-amber-100 text-amber-800"
-                      : r.status === "approved"
-                      ? "bg-green-100 text-green-800"
-                      : "bg-red-100 text-red-800"
-                  }`}
+                  style={{
+                    fontSize: "0.75rem",
+                    padding: "0.125rem 0.5rem",
+                    borderRadius: "var(--radius-lg)",
+                    background: r.status === "pending" ? "rgba(193, 140, 93, 0.2)" : r.status === "approved" ? "rgba(93, 112, 82, 0.2)" : "rgba(168, 84, 72, 0.2)",
+                    color: r.status === "pending" ? "var(--secondary)" : r.status === "approved" ? "var(--primary)" : "var(--destructive)",
+                  }}
                 >
                   {r.status === "pending" ? "待处理" : r.status === "approved" ? "已通过" : r.status === "rejected" ? "已拒绝" : r.status}
                 </span>
-                <span className="text-gray-500 text-xs">
+                <span className="muted-text" style={{ fontSize: "0.75rem" }}>
                   {new Date(r.created_at).toLocaleString("zh-CN")}
                 </span>
                 {r.note && (
-                  <span className="w-full text-gray-600 text-xs mt-1">备注：{r.note}</span>
+                  <span className="muted-text" style={{ width: "100%", fontSize: "0.75rem", marginTop: "0.25rem" }}>
+                    备注：{r.note}
+                  </span>
                 )}
               </li>
             ))}

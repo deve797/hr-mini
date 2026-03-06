@@ -26,7 +26,6 @@ export default function NewEmployeePage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [workShiftOptions, setWorkShiftOptions] = useState<{ value: string; label: string }[]>([]);
   const [name, setName] = useState("");
-  const [empNo, setEmpNo] = useState("");
   const [idCard, setIdCard] = useState("");
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState<"试用期" | "转正">("试用期");
@@ -203,13 +202,8 @@ export default function NewEmployeePage() {
 
   const submit = async () => {
     const trimmedName = name.trim();
-    const trimmedEmpNo = empNo.trim();
     if (!trimmedName) {
       setMsg("请填写员工姓名");
-      return;
-    }
-    if (!trimmedEmpNo) {
-      setMsg("请填写工号");
       return;
     }
     if (!currentStoreId) {
@@ -246,8 +240,6 @@ export default function NewEmployeePage() {
     setMsg("提交中...");
     const workShiftValue = /^\d+$/.test(String(workShift)) ? parseInt(String(workShift), 10) : workShift;
     const payload = {
-      emp_no: trimmedEmpNo,
-      id_number: trimmedEmpNo,
       name: trimmedName,
       status,
       current_store_id: homeStoreId,
@@ -268,32 +260,34 @@ export default function NewEmployeePage() {
     const { data: inserted, error } = await supabase
       .from("employees")
       .insert([payload])
-      .select("id")
+      .select("id, emp_no")
       .single();
 
     if (error) {
       if (error.message.includes("duplicate") || error.message.includes("unique")) {
-        setMsg("工号已存在，请更换工号");
+        setMsg("提交失败：编号或数据冲突，请重试");
         return;
       }
       setMsg("提交失败：" + error.message);
       return;
     }
 
+    const empNoDisplay = (inserted as { emp_no?: string })?.emp_no ?? "";
+    const suffix = empNoDisplay ? `，员工编号：${empNoDisplay}` : "";
+
     if (applyInsurance && isStoreManager(profile) && profile?.store_id && inserted?.id) {
       const { error: irError } = await supabase.from("insurance_requests").insert([
         { employee_id: inserted.id, store_id: profile.store_id, note: "新入职申请意外险" },
       ]);
       if (irError) {
-        setMsg("提交成功！新员工已入职。意外险申请提交失败：" + irError.message);
+        setMsg(`提交成功！新员工已入职${suffix}。意外险申请提交失败：${irError.message}`);
       } else {
-        setMsg("提交成功！新员工已入职，并已提交意外险申请。");
+        setMsg(`提交成功！新员工已入职，并已提交意外险申请${suffix}。`);
       }
     } else {
-      setMsg("提交成功！新员工已入职。");
+      setMsg(`提交成功！新员工已入职${suffix}。`);
     }
     setName("");
-    setEmpNo("");
     setIdCard("");
     setPhone("");
     setStatus("试用期");
@@ -308,17 +302,17 @@ export default function NewEmployeePage() {
 
   if (loading) {
     return (
-      <main style={{ padding: 24, fontFamily: "system-ui" }}>
-        <p>加载中...</p>
+      <main className="page-container" style={{ maxWidth: 28 * 16 }}>
+        <p className="muted-text">加载中...</p>
       </main>
     );
   }
 
   if (!profile) {
     return (
-      <main style={{ padding: 24, fontFamily: "system-ui" }}>
-        <p>请先登录。</p>
-        <Link href="/login" style={{ marginTop: 12, display: "inline-block" }}>
+      <main className="page-container" style={{ maxWidth: 28 * 16 }}>
+        <p className="muted-text">请先登录。</p>
+        <Link href="/login" className="btn btn-ghost btn-sm" style={{ marginTop: "0.75rem", display: "inline-flex" }}>
           去登录
         </Link>
       </main>
@@ -326,219 +320,117 @@ export default function NewEmployeePage() {
   }
 
   return (
-    <main style={{ padding: 24, fontFamily: "system-ui" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>员工入职</h1>
-        <Link
-          href="/workdays"
-          style={{
-            padding: "8px 12px",
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            background: "#fff",
-            fontSize: 14,
-            textDecoration: "none",
-            color: "inherit",
-          }}
-        >
+    <main className="page-container" style={{ maxWidth: 28 * 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+        <h1 className="heading-1">员工入职</h1>
+        <Link href="/workdays" className="btn btn-outline btn-sm">
           录入工作天数
         </Link>
       </div>
 
-      <div style={{ maxWidth: 400 }}>
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>姓名 *</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="员工姓名"
-            style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
-          />
+      <div style={{ maxWidth: 25 * 16 }}>
+        <div className="field">
+          <label className="field-label">姓名 *</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="员工姓名" className="input" />
         </div>
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>工号 *</label>
-          <input
-            type="text"
-            value={empNo}
-            onChange={(e) => setEmpNo(e.target.value)}
-            placeholder="工号"
-            style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
-          />
+        <div className="field">
+          <label className="field-label">身份证号码</label>
+          <input type="text" value={idCard} onChange={(e) => setIdCard(e.target.value)} placeholder="身份证号码" maxLength={18} className="input" />
         </div>
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>身份证号码</label>
-          <input
-            type="text"
-            value={idCard}
-            onChange={(e) => setIdCard(e.target.value)}
-            placeholder="身份证号码"
-            maxLength={18}
-            style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
-          />
+        <div className="field">
+          <label className="field-label">电话号码</label>
+          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="电话号码" className="input" />
         </div>
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>电话号码</label>
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="电话号码"
-            style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
-          />
-        </div>
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>状态</label>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as "试用期" | "转正")}
-            style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
-          >
+        <div className="field">
+          <label className="field-label">状态</label>
+          <select value={status} onChange={(e) => setStatus(e.target.value as "试用期" | "转正")} className="input">
             <option value="试用期">试用期</option>
             <option value="转正">转正</option>
           </select>
         </div>
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>入职日期 *</label>
-          <input
-            type="date"
-            value={hireDate}
-            onChange={(e) => setHireDate(e.target.value)}
-            style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
-          />
+        <div className="field">
+          <label className="field-label">入职日期 *</label>
+          <input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} className="input" />
         </div>
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>当前门店 *</label>
-          <select
-            value={currentStoreId}
-            onChange={(e) => setCurrentStoreId(e.target.value)}
-            style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
-          >
+        <div className="field">
+          <label className="field-label">当前门店 *</label>
+          <select value={currentStoreId} onChange={(e) => setCurrentStoreId(e.target.value)} className="input">
             <option value="">请选择门店</option>
             {stores.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
+              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
         </div>
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>签约主体 *</label>
-          <select
-            value={contractEntityId}
-            onChange={(e) => setContractEntityId(e.target.value)}
-            style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
-          >
+        <div className="field">
+          <label className="field-label">签约主体 *</label>
+          <select value={contractEntityId} onChange={(e) => setContractEntityId(e.target.value)} className="input">
             <option value="">请选择签约主体</option>
             {contractEntities.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
+              <option key={e.id} value={e.id}>{e.name}</option>
             ))}
           </select>
           {contractEntities.length === 0 && (
-            <div style={{ marginTop: 6, fontSize: 12, color: "#666" }}>
-              暂无签约主体可选。请在 Supabase 表 <code>legal_entities</code> 中新增数据，并确保 RLS 允许当前用户读取。
-            </div>
+            <p className="field-hint">暂无签约主体可选。请在 Supabase 表 <code>legal_entities</code> 中新增数据，并确保 RLS 允许当前用户读取。</p>
           )}
         </div>
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>部门 *</label>
-          <select
-            value={deptId}
-            onChange={(e) => setDeptId(e.target.value)}
-            style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
-          >
+        <div className="field">
+          <label className="field-label">部门 *</label>
+          <select value={deptId} onChange={(e) => setDeptId(e.target.value)} className="input">
             <option value="">请选择部门</option>
             {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.dept_name}
-              </option>
+              <option key={d.id} value={d.id}>{d.dept_name}</option>
             ))}
           </select>
           {departments.length === 0 && (
-            <div style={{ marginTop: 6, fontSize: 12, color: "#666" }}>
-              暂无部门可选。请在 Supabase 表 <code>departments</code> 或 <code>department</code> 中新增数据。
-            </div>
+            <p className="field-hint">暂无部门可选。请在 Supabase 表 <code>departments</code> 或 <code>department</code> 中新增数据。</p>
           )}
         </div>
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>职位 *</label>
-          <select
-            value={positionId}
-            onChange={(e) => setPositionId(e.target.value)}
-            style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
-          >
+        <div className="field">
+          <label className="field-label">职位 *</label>
+          <select value={positionId} onChange={(e) => setPositionId(e.target.value)} className="input">
             <option value="">请选择职位</option>
             {positions.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
+              <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
           {positions.length === 0 && (
-            <div style={{ marginTop: 6, fontSize: 12, color: "#666" }}>
-              暂无职位可选。请在 Supabase 表 <code>position_catalog</code> 中新增数据。
-            </div>
+            <p className="field-hint">暂无职位可选。请在 Supabase 表 <code>position_catalog</code> 中新增数据。</p>
           )}
         </div>
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>工作时长 *</label>
-          <select
-            value={workShift}
-            onChange={(e) => setWorkShift(e.target.value)}
-            style={{ width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
-          >
+        <div className="field">
+          <label className="field-label">工作时长 *</label>
+          <select value={workShift} onChange={(e) => setWorkShift(e.target.value)} className="input">
             <option value="">请选择工作时长</option>
             {workShiftOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
           {workShiftOptions.length === 0 && (
-            <div style={{ marginTop: 6, fontSize: 12, color: "#c00" }}>
-              暂无工作时长可选，请检查 work_shift 表或联系管理员。
-            </div>
+            <p className="field-hint" style={{ color: "var(--destructive)" }}>暂无工作时长可选，请检查 work_shift 表或联系管理员。</p>
           )}
         </div>
 
-        <section style={{ marginTop: 20, padding: 12, border: "1px solid #e5e7eb", borderRadius: 8, background: "#f9fafb" }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px 0" }}>意外险购买</h3>
-          <p style={{ fontSize: 13, color: "#374151", margin: 0, lineHeight: 1.5 }}>
+        <section className="card" style={{ marginTop: "1.25rem", padding: "1rem" }}>
+          <h3 className="heading-2" style={{ fontSize: "0.875rem", marginBottom: "0.5rem" }}>意外险购买</h3>
+          <p className="body-text muted-text" style={{ marginBottom: "0.625rem" }}>
             新员工入职后，店长可在「投保申请」页为该员工提交意外险申请，总部在「投保处理」页录入保单并激活员工。
           </p>
-          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <Link
-              href="/insurance-request"
-              style={{
-                fontSize: 13,
-                color: "#2563eb",
-                textDecoration: "underline",
-              }}
-            >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <Link href="/insurance-request" className="btn btn-ghost btn-sm">
               去投保申请页
             </Link>
-            {isStoreManager(profile) && (
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={applyInsurance}
-                  onChange={(e) => setApplyInsurance(e.target.checked)}
-                />
-                本次入职后同时提交意外险申请
-              </label>
-            )}
+            <label style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.8125rem", cursor: isStoreManager(profile) ? "pointer" : "not-allowed" }}>
+              <input type="checkbox" checked={applyInsurance} onChange={(e) => setApplyInsurance(e.target.checked)} disabled={!isStoreManager(profile)} />
+              本次入职后同时提交意外险申请
+              {!isStoreManager(profile) && <span className="muted-text" style={{ fontSize: "0.75rem" }}>（仅店长可选）</span>}
+            </label>
           </div>
         </section>
 
-        <button
-          onClick={submit}
-          style={{ marginTop: 20, padding: "10px 16px", borderRadius: 8, border: "1px solid #ddd", background: "#fff", fontWeight: 600 }}
-        >
+        <button type="button" onClick={submit} className="btn btn-primary" style={{ marginTop: "1.25rem" }}>
           提交入职
         </button>
-        <div style={{ marginTop: 12, fontSize: 14 }}>{msg}</div>
+        <p className="muted-text" style={{ marginTop: "0.75rem" }}>{msg}</p>
       </div>
     </main>
   );

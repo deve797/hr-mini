@@ -37,60 +37,50 @@ export default function LoginPage() {
   };
 
   return (
-    <main style={{ padding: 24, fontFamily: "system-ui", maxWidth: 420 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700 }}>登录</h1>
+    <main className="page-container" style={{ maxWidth: 28 * 16 }}>
+      <h1 className="heading-1" style={{ marginBottom: "1.5rem" }}>
+        登录
+      </h1>
 
-      <div style={{ marginTop: 16 }}>
-        <div style={{ fontSize: 14, marginBottom: 6 }}>邮箱</div>
+      <div className="field">
+        <label htmlFor="email" className="field-label">
+          邮箱
+        </label>
         <input
+          id="email"
+          type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          style={{
-            width: "100%",
-            padding: 10,
-            border: "1px solid #ddd",
-            borderRadius: 10,
-          }}
+          className="input"
         />
       </div>
 
-      <div style={{ marginTop: 12 }}>
-        <div style={{ fontSize: 14, marginBottom: 6 }}>密码</div>
+      <div className="field">
+        <label htmlFor="password" className="field-label">
+          密码
+        </label>
         <input
+          id="password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="password"
-          style={{
-            width: "100%",
-            padding: 10,
-            border: "1px solid #ddd",
-            borderRadius: 10,
-          }}
+          className="input"
         />
       </div>
 
-      <button
-        onClick={signIn}
-        style={{
-          marginTop: 16,
-          width: "100%",
-          padding: 12,
-          borderRadius: 12,
-          border: "1px solid #ddd",
-          background: "#fff",
-          fontWeight: 600,
-        }}
-      >
+      <button type="button" onClick={signIn} className="btn btn-primary" style={{ width: "100%", marginTop: "0.5rem" }}>
         登录
       </button>
 
-      <div style={{ marginTop: 12, fontSize: 14 }}>{msg}</div>
+      <p className="muted-text" style={{ marginTop: "1rem" }}>
+        {msg}
+      </p>
 
-      <div style={{ marginTop: 16, fontSize: 12, color: "#666" }}>
+      <div className="muted-text" style={{ marginTop: "1.5rem", fontSize: "0.8125rem", lineHeight: 1.6 }}>
         <p>提示：账号请在 Supabase Dashboard → Authentication → Users 创建并设置密码。</p>
-        <p style={{ marginTop: 6 }}>
+        <p style={{ marginTop: "0.5rem" }}>
           店长账号还需在表 users_profile 中有一行：user_id=该用户 UUID，role=store_manager，store_id=所属门店 UUID。并执行 <code>scripts/users_profile_rls.sql</code> 确保可读自己的 profile。
         </p>
       </div>
