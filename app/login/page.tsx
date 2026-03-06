@@ -33,7 +33,7 @@ export default function LoginPage() {
       return;
     }
     setMsg("登录成功，跳转中...");
-    router.push("/me");
+    router.push("/dashboard");
   };
 
   return (

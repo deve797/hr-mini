@@ -20,6 +20,7 @@ type PayrollMonthRow = {
   bonus_manual: number;
   adjustment_manual: number;
   status: "draft" | "locked";
+  store_approved_at: string | null;
 };
 
 type SplitRow = {
@@ -106,7 +107,7 @@ export default function PayrollPage() {
     const { data, error } = await supabase
       .from("payroll_month")
       .select(
-        "id,month,employee_id,total_days,gross_total,performance_manual,bonus_manual,adjustment_manual,status"
+        "id,month,employee_id,total_days,gross_total,performance_manual,bonus_manual,adjustment_manual,status,store_approved_at"
       )
       .eq("month", month)
       .order("gross_total", { ascending: false });
@@ -256,13 +257,14 @@ export default function PayrollPage() {
                 <th className={styles.th}>奖金(手录)</th>
                 <th className={styles.th}>调整(手录)</th>
                 <th className={styles.th}>状态</th>
+                <th className={styles.th}>店长审核</th>
                 <th className={styles.th}>操作</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td className={styles.td} colSpan={8}>
+                  <td className={styles.td} colSpan={9}>
                     本月暂无工资数据。你可以先录入 workdays，然后点“运行工资计算”生成。
                   </td>
                 </tr>
@@ -312,6 +314,9 @@ export default function PayrollPage() {
                       />
                     </td>
                     <td className={styles.td}>{r.status}</td>
+                    <td className={styles.td}>
+                      {r.store_approved_at ? "已审核" : "待审核"}
+                    </td>
                     <td className={styles.td}>
                       <button
                         type="button"

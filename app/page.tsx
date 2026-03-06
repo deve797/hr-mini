@@ -36,6 +36,16 @@ export default function Home() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (loading) return;
+    if (!profile) return;
+    const r = profile.role ?? null;
+    if ((r === "store_manager" && profile.store_id) || r === "hq" || r === "finance") {
+      router.replace("/dashboard");
+      return;
+    }
+  }, [loading, profile, router]);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.refresh();
@@ -45,19 +55,28 @@ export default function Home() {
   const role = profile?.role ?? null;
   const isStoreManager = role === "store_manager" && !!profile?.store_id;
   const isHq = role === "hq";
+  const isFinance = role === "finance";
+  const hasKnownRole = isStoreManager || isHq || isFinance;
 
   const navLinks: { href: string; label: string; show: boolean }[] = [
     { href: "/insurance-request", label: "投保申请（店长）", show: isStoreManager },
-    { href: "/insurance", label: "投保处理（总部）", show: isHq },
+    { href: "/insurance", label: "投保处理（总部）", show: isHq || isFinance },
     { href: "/employees/new", label: "员工入职", show: isStoreManager },
     { href: "/workdays", label: "工作天数", show: isStoreManager },
-    { href: "/payroll", label: "薪酬", show: isHq },
+    { href: "/payroll", label: "薪酬", show: isHq || isFinance },
   ].filter((item) => item.show);
 
-  if (loading) {
+  if (loading || (profile && hasKnownRole)) {
     return (
       <div className={styles.page}>
         <main className={styles.main}>
+          <header className={styles.welcomeHeader}>
+            <div className={styles.welcomeText}>
+              <span className={styles.welcomeLine1}>欢迎来到左林右果</span>
+              <span className={styles.welcomeLine2}>人事管理系统</span>
+            </div>
+            <div className={styles.welcomeImageSlot} aria-hidden />
+          </header>
           <div className={styles.intro}>
             <h1>HR Mini</h1>
             <p className="muted-text">加载中…</p>
@@ -70,6 +89,13 @@ export default function Home() {
   return (
     <div className={styles.page}>
       <main className={styles.main}>
+        <header className={styles.welcomeHeader}>
+          <div className={styles.welcomeText}>
+            <span className={styles.welcomeLine1}>欢迎来到左林右果</span>
+            <span className={styles.welcomeLine2}>人事管理系统</span>
+          </div>
+          <div className={styles.welcomeImageSlot} aria-hidden />
+        </header>
         <div className={styles.intro}>
           <h1>HR Mini</h1>
           <p>请选择入口：</p>

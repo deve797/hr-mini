@@ -31,7 +31,7 @@ DECLARE
 BEGIN
   IF (NEW.emp_no IS NULL OR trim(NEW.emp_no) = '') THEN
     next_val := nextval('public.seq_employees_emp_no');
-    new_no   := 'E' || next_val::text;
+    new_no   := 'E' || LPAD(next_val::text, GREATEST(4, length(next_val::text)), '0');
     NEW.emp_no := new_no;
     IF (SELECT EXISTS (
       SELECT 1 FROM information_schema.columns
@@ -58,11 +58,12 @@ DECLARE
   r      record;
   cur_no bigint;
 BEGIN
+  -- 只对形如 E0001、E0002 的编号取最大号，忽略 TEST-001 等非规范值
   SELECT COALESCE(MAX(
     NULLIF(regexp_replace(emp_no, '^E', '', 'i'), '')::bigint
   ), 0) INTO max_no
   FROM public.employees
-  WHERE emp_no IS NOT NULL AND trim(emp_no) <> '';
+  WHERE emp_no IS NOT NULL AND trim(emp_no) <> '' AND emp_no ~ '^E[0-9]+$';
 
   cur_no := max_no;
   FOR r IN
@@ -71,15 +72,16 @@ BEGIN
     ORDER BY id
   LOOP
     cur_no := cur_no + 1;
-    UPDATE public.employees SET emp_no = 'E' || cur_no::text WHERE id = r.id;
+    UPDATE public.employees SET emp_no = 'E' || LPAD(cur_no::text, GREATEST(4, length(cur_no::text)), '0') WHERE id = r.id;
   END LOOP;
 
   IF cur_no > max_no THEN
     PERFORM setval('public.seq_employees_emp_no', cur_no);
   ELSE
-    PERFORM setval('public.seq_employees_emp_no', (SELECT COALESCE(MAX(
+    -- setval 最小为 1，不能传 0（表中无 E+数字 时 MAX 为 0）
+    PERFORM setval('public.seq_employees_emp_no', GREATEST(1, (SELECT COALESCE(MAX(
       NULLIF(regexp_replace(emp_no, '^E', '', 'i'), '')::bigint
-    ), 0) FROM public.employees));
+    ), 0) FROM public.employees WHERE emp_no ~ '^E[0-9]+$')));
   END IF;
 END $$;
 
@@ -89,6 +91,7 @@ BEGIN
   ALTER TABLE public.employees ADD CONSTRAINT uq_employees_emp_no UNIQUE (emp_no);
 EXCEPTION
   WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;  /* 约束已存在时可能报 relation 已存在 42P07 */
 END $$;
 
 -- 7) 非空约束：仅当不存在空值时设置 NOT NULL（迁移后应无空值）
