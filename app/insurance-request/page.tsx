@@ -6,7 +6,13 @@ import { supabase } from "@/lib/supabaseClient";
 
 type Profile = { role: string | null; store_id: string | null } | null;
 
-type Employee = { id: string; name: string | null; emp_no: string | null };
+type Employee = {
+  id: string;
+  name: string | null;
+  emp_no: string | null;
+  employment_status: string | null;
+  system_status: string | null;
+};
 
 type InsuranceRequestRow = {
   id: string;
@@ -14,14 +20,30 @@ type InsuranceRequestRow = {
   status: string;
   note: string | null;
   created_at: string;
-  employees: { name: string | null } | { name: string | null }[] | null;
+  employees: { name: string | null; emp_no: string | null } | { name: string | null; emp_no: string | null }[] | null;
 };
 
-function getEmployeeName(r: InsuranceRequestRow): string {
+function getEmployeeDisplayName(e: Employee): string {
+  if (e.name && e.emp_no) return `${e.name} (${e.emp_no})`;
+  if (e.name) return e.name;
+  if (e.emp_no) return e.emp_no;
+  return e.id.slice(0, 8) + "…";
+}
+
+function getRequestEmployeeName(r: InsuranceRequestRow): string {
   const emp = r.employees;
   if (Array.isArray(emp)) return emp[0]?.name ?? "(未知)";
   return emp?.name ?? "(未知)";
 }
+
+function getRequestEmployeeNo(r: InsuranceRequestRow): string | null {
+  const emp = r.employees;
+  if (Array.isArray(emp)) return emp[0]?.emp_no ?? null;
+  return emp?.emp_no ?? null;
+}
+
+const EMPLOYMENT_LEFT = "离职";
+const SYSTEM_INACTIVE = "inactive";
 
 export default function InsuranceRequestPage() {
   const [email, setEmail] = useState<string | null>(null);
@@ -41,7 +63,31 @@ export default function InsuranceRequestPage() {
 
   const storeId = profile?.store_id ?? null;
 
-  const loadEmployees = useCallback(async () => {
+  const loadProfile = useCallback(async () => {
+    const { data: authData } = await supabase.auth.getUser();
+    const user = authData?.user ?? null;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    setEmail(user.email ?? null);
+    setUserId(user.id);
+    const { data: profileData, error: profileErr } = await supabase
+      .from("users_profile")
+      .select("role, store_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (profileErr) setProfileError(profileErr.message);
+    else setProfileError(null);
+    setProfile(
+      profileData
+        ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null }
+        : null
+    );
+    setLoading(false);
+  }, []);
+
+  const loadEmployeesFromPool = useCallback(async () => {
     if (!storeId) {
       setEmployeesLoading(false);
       return;
@@ -49,21 +95,27 @@ export default function InsuranceRequestPage() {
     setEmployeesLoading(true);
     setEmployeesError(null);
     const { data, error } = await supabase
-      .from("employees")
-      .select("id, name, emp_no")
-      .eq("current_store_id", storeId)
-      .order("name");
+      .from("store_staff_pool")
+      .select("*, employees(id, name, emp_no, employment_status, system_status)")
+      .eq("store_id", storeId)
+      .eq("status", "active");
 
     if (error) {
       setEmployeesError(error.message);
-      const { data: fallback } = await supabase
-        .from("employees")
-        .select("id, name, emp_no")
-        .order("name");
-      setEmployees((fallback as Employee[]) ?? []);
-    } else {
-      setEmployees((data as Employee[]) ?? []);
+      setEmployees([]);
+      setEmployeesLoading(false);
+      return;
     }
+    const raw = (data as { employees: Employee | null }[]) ?? [];
+    const list: Employee[] = [];
+    for (const row of raw) {
+      const emp = row.employees;
+      if (!emp) continue;
+      if (emp.system_status === SYSTEM_INACTIVE || emp.employment_status === EMPLOYMENT_LEFT) continue;
+      list.push(emp);
+    }
+    list.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+    setEmployees(list);
     setEmployeesLoading(false);
   }, [storeId]);
 
@@ -75,47 +127,39 @@ export default function InsuranceRequestPage() {
     setRequestsLoading(true);
     const { data, error } = await supabase
       .from("insurance_requests")
-      .select("id, employee_id, status, note, created_at, employees(name)")
+      .select("id, employee_id, status, note, created_at, employees(name, emp_no)")
       .eq("store_id", storeId)
       .order("created_at", { ascending: false });
     if (!error && data) setRequests((data as unknown as InsuranceRequestRow[]) ?? []);
     setRequestsLoading(false);
   }, [storeId]);
 
-  useEffect(() => {
-    (async () => {
-      const { data: authData } = await supabase.auth.getUser();
-      const user = authData?.user ?? null;
-
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      setEmail(user.email ?? null);
-      setUserId(user.id);
-
-      const { data: profileData, error: profileErr } = await supabase
-        .from("users_profile")
-        .select("role, store_id")
-        .eq("user_id", user.id)
+  const checkDuplicatePendingRequest = useCallback(
+    async (employeeId: string): Promise<boolean> => {
+      if (!storeId) return false;
+      const { data, error } = await supabase
+        .from("insurance_requests")
+        .select("id")
+        .eq("store_id", storeId)
+        .eq("employee_id", employeeId)
+        .eq("status", "pending")
         .maybeSingle();
-
-      if (profileErr) setProfileError(profileErr.message);
-      else setProfileError(null);
-
-      setProfile(
-        profileData
-          ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null }
-          : null
-      );
-      setLoading(false);
-    })();
-  }, []);
+      if (error) {
+        console.error("checkDuplicatePendingRequest", error);
+        return false;
+      }
+      return !!data;
+    },
+    [storeId]
+  );
 
   useEffect(() => {
-    loadEmployees();
-  }, [loadEmployees]);
+    loadProfile();
+  }, [loadProfile]);
+
+  useEffect(() => {
+    loadEmployeesFromPool();
+  }, [loadEmployeesFromPool]);
 
   useEffect(() => {
     loadRequests();
@@ -134,6 +178,12 @@ export default function InsuranceRequestPage() {
     }
     setSubmitting(true);
     setSubmitMsg("");
+    const hasPending = await checkDuplicatePendingRequest(selectedEmployeeId.trim());
+    if (hasPending) {
+      setSubmitMsg("该员工已有待处理投保申请，请勿重复提交");
+      setSubmitting(false);
+      return;
+    }
     const { error } = await supabase.from("insurance_requests").insert([
       {
         employee_id: selectedEmployeeId.trim(),
@@ -143,10 +193,11 @@ export default function InsuranceRequestPage() {
     ]);
     setSubmitting(false);
     if (error) {
-      setSubmitMsg("提交失败：" + error.message);
+      console.error("insurance_requests insert", error);
+      setSubmitMsg("提交失败，请稍后重试。");
       return;
     }
-    setSubmitMsg("已提交申请");
+    setSubmitMsg("已提交申请，等待总部处理。总部完成投保后，该员工将自动激活并可录入工时。");
     setSelectedEmployeeId("");
     setNote("");
     loadRequests();
@@ -193,7 +244,19 @@ export default function InsuranceRequestPage() {
     <main className="page-container" style={{ maxWidth: 32 * 16 }}>
       <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>投保申请</h1>
 
-      <section className="card" style={{ padding: "1rem", marginBottom: "1.5rem" }}>
+      <section
+        className="card"
+        style={{
+          padding: "0.5rem 0.75rem",
+          marginBottom: "1.5rem",
+          background: "var(--muted)",
+          borderRadius: "var(--radius-lg)",
+          fontSize: "0.8rem",
+        }}
+      >
+        <p className="body-text muted-text" style={{ marginBottom: "0.25rem", fontWeight: 600 }}>
+          调试信息
+        </p>
         <p className="body-text muted-text" style={{ marginBottom: "0.25rem" }}>
           <strong>email:</strong> {email ?? "—"}
         </p>
@@ -231,12 +294,14 @@ export default function InsuranceRequestPage() {
               </option>
               {employees.map((e) => (
                 <option key={e.id} value={e.id}>
-                  {e.name && e.emp_no ? `${e.name} (${e.emp_no})` : (e.name || e.emp_no || e.id)}
+                  {getEmployeeDisplayName(e)}
                 </option>
               ))}
             </select>
             {employeesError && (
-              <p className="field-hint msg-error">员工列表：{employeesError}（已回退为全量）</p>
+              <p className="field-hint msg-error">
+                员工池加载失败：{employeesError}。请检查本店是否已配置可调用员工，或联系管理员。
+              </p>
             )}
           </div>
           <div className="field">
@@ -263,7 +328,7 @@ export default function InsuranceRequestPage() {
             {submitting ? "提交中…" : "提交投保申请"}
           </button>
           {submitMsg && (
-            <p className={submitMsg === "已提交申请" ? "msg-success" : "msg-error"} style={{ marginTop: "0.25rem" }}>
+            <p className={submitMsg.startsWith("已提交申请") ? "msg-success" : "msg-error"} style={{ marginTop: "0.25rem" }}>
               {submitMsg}
             </p>
           )}
@@ -290,7 +355,12 @@ export default function InsuranceRequestPage() {
                   alignItems: "center",
                 }}
               >
-                <span style={{ fontWeight: 600 }}>{getEmployeeName(r)}</span>
+                <span style={{ fontWeight: 600 }}>{getRequestEmployeeName(r)}</span>
+                {getRequestEmployeeNo(r) && (
+                  <span className="muted-text" style={{ fontSize: "0.75rem" }}>
+                    {getRequestEmployeeNo(r)}
+                  </span>
+                )}
                 <span
                   style={{
                     fontSize: "0.75rem",

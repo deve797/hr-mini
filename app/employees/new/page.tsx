@@ -408,6 +408,7 @@ export default function NewEmployeePage() {
     }
 
     const insertedRow = inserted as { id: string; emp_no?: string; name?: string } | null;
+    // TODO: 新增员工后未来应自动加入本店员工池（store_staff_pool），便于投保申请等按「门店可调用员工」过滤。本次先不实现。
     const newEmpNo = insertedRow?.emp_no ?? "";
     const newName = insertedRow?.name ?? name.trim();
 
