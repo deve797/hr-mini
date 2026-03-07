@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -8,83 +8,82 @@ import styles from "./page.module.css";
 
 type Profile = { role: string | null; store_id: string | null } | null;
 
+type PageStatus = "loading" | "guest" | "redirecting" | "error";
+
+function isValidRole(profile: Profile): boolean {
+  if (!profile || !profile.role) return false;
+  const r = profile.role;
+  if (r === "store_manager") return !!profile.store_id;
+  return r === "hq" || r === "finance";
+}
+
+function getRedirectMessage(role: string | null): string {
+  if (role === "store_manager") return "正在进入店长工作台…";
+  if (role === "hq") return "正在进入总部工作台…";
+  if (role === "finance") return "正在进入财务工作台…";
+  return "正在进入工作台…";
+}
+
 export default function Home() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile>(null);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<PageStatus>("loading");
+  const hasRedirected = useRef(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       const { data: authData } = await supabase.auth.getUser();
       const user = authData?.user ?? null;
+
+      if (cancelled) return;
       if (!user) {
         setProfile(null);
-        setLoading(false);
+        setStatus("guest");
         return;
       }
+
       const { data: profileData } = await supabase
         .from("users_profile")
         .select("role, store_id")
         .eq("user_id", user.id)
         .maybeSingle();
-      setProfile(
-        profileData
-          ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null }
-          : null
-      );
-      setLoading(false);
+
+      if (cancelled) return;
+
+      const nextProfile: Profile = profileData
+        ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null }
+        : null;
+
+      setProfile(nextProfile);
+
+      if (nextProfile && isValidRole(nextProfile)) {
+        setStatus("redirecting");
+      } else {
+        setStatus("error");
+      }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (loading) return;
-    if (!profile) return;
-    const r = profile.role ?? null;
-    if ((r === "store_manager" && profile.store_id) || r === "hq" || r === "finance") {
-      router.replace("/dashboard");
+    if (status !== "redirecting" || !profile || !isValidRole(profile) || hasRedirected.current) {
       return;
     }
-  }, [loading, profile, router]);
+    hasRedirected.current = true;
+    router.replace("/dashboard");
+  }, [status, profile, router]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    router.refresh();
     setProfile(null);
+    setStatus("guest");
+    router.refresh();
   };
-
-  const role = profile?.role ?? null;
-  const isStoreManager = role === "store_manager" && !!profile?.store_id;
-  const isHq = role === "hq";
-  const isFinance = role === "finance";
-  const hasKnownRole = isStoreManager || isHq || isFinance;
-
-  const navLinks: { href: string; label: string; show: boolean }[] = [
-    { href: "/insurance-request", label: "投保申请（店长）", show: isStoreManager },
-    { href: "/insurance", label: "投保处理（总部）", show: isHq || isFinance },
-    { href: "/employees/new", label: "员工入职", show: isStoreManager },
-    { href: "/workdays", label: "工作天数", show: isStoreManager },
-    { href: "/payroll", label: "薪酬", show: isHq || isFinance },
-  ].filter((item) => item.show);
-
-  if (loading || (profile && hasKnownRole)) {
-    return (
-      <div className={styles.page}>
-        <main className={styles.main}>
-          <header className={styles.welcomeHeader}>
-            <div className={styles.welcomeText}>
-              <span className={styles.welcomeLine1}>欢迎来到左林右果</span>
-              <span className={styles.welcomeLine2}>人事管理系统</span>
-            </div>
-            <div className={styles.welcomeImageSlot} aria-hidden />
-          </header>
-          <div className={styles.intro}>
-            <h1>HR Mini</h1>
-            <p className="muted-text">加载中…</p>
-          </div>
-        </main>
-      </div>
-    );
-  }
 
   return (
     <div className={styles.page}>
@@ -98,28 +97,37 @@ export default function Home() {
         </header>
         <div className={styles.intro}>
           <h1>HR Mini</h1>
-          <p>请选择入口：</p>
+
+          {status === "loading" && (
+            <p className={styles.mutedText}>正在加载用户信息…</p>
+          )}
+
+          {status === "guest" && <p>请选择入口：</p>}
+
+          {status === "redirecting" && (
+            <p className={styles.mutedText}>{getRedirectMessage(profile?.role ?? null)}</p>
+          )}
+
+          {status === "error" && (
+            <p className={styles.errorMessage}>
+              账号已登录，但未配置可用权限，请联系总部管理员。
+            </p>
+          )}
         </div>
-        <nav className={styles.nav}>
-          {profile ? (
-            <>
-              {navLinks.map((item) => (
-                <Link key={item.href} href={item.href}>
-                  {item.label}
-                </Link>
-              ))}
+        {(status === "guest" || status === "error") && (
+          <nav className={styles.nav}>
+            {status === "guest" && <Link href="/login">登录</Link>}
+            {status === "error" && (
               <button
                 type="button"
                 onClick={handleSignOut}
                 className={styles.navButton}
               >
-                退出
+                退出登录
               </button>
-            </>
-          ) : (
-            <Link href="/login">登录</Link>
-          )}
-        </nav>
+            )}
+          </nav>
+        )}
       </main>
     </div>
   );

@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 type Profile = { role: string | null; store_id: string | null } | null;
 
-type Employee = { id: string; name: string | null; emp_no?: string | null; status?: string };
+type Employee = { id: string; name: string | null; emp_no?: string | null; employment_status?: string };
 
 type MonthlyWorkdayRow = {
   id: string;
@@ -143,7 +143,7 @@ export default function WorkdaysPage() {
     setSearching(true);
     supabase
       .from("employees")
-      .select("id, name, emp_no, status")
+      .select("id, name, emp_no, employment_status")
       .or(`name.ilike.%${t}%,emp_no.ilike.%${t}%`)
       .limit(20)
       .then(({ data, error }) => {

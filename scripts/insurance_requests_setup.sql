@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS public.employee_insurance (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 6) 触发器：employee_insurance 插入成功后，将 employees.status 更新为 'active'
+-- 6) 触发器：employee_insurance 插入成功后，将 employees.system_status 更新为 'active'
 CREATE OR REPLACE FUNCTION public.set_employee_active_on_insurance_insert()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -111,7 +111,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  UPDATE public.employees SET status = 'active' WHERE id = NEW.employee_id;
+  UPDATE public.employees SET system_status = 'active' WHERE id = NEW.employee_id;
   RETURN NEW;
 END;
 $$;

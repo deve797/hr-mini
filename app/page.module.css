@@ -92,6 +92,21 @@
   color: var(--muted-foreground);
 }
 
+.mutedText {
+  font-family: var(--font-body);
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+
+.errorMessage {
+  font-family: var(--font-body);
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--destructive, #b91c1c);
+  font-weight: 500;
+}
+
 .nav {
   display: flex;
   flex-wrap: wrap;
