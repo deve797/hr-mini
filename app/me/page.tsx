@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -72,7 +73,10 @@ export default function MePage() {
         <h1 className="heading-1" style={{ marginBottom: "1rem" }}>
           我是谁
         </h1>
-        <p className="muted-text">未登录</p>
+        <p className="muted-text" style={{ marginBottom: "1rem" }}>未登录</p>
+        <Link href="/login" className="btn btn-primary" style={{ display: "inline-flex" }}>
+          去登录
+        </Link>
       </main>
     );
   }
