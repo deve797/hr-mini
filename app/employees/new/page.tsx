@@ -16,9 +16,9 @@ type Position = { id: string; name: string };
 
 const EMPLOYMENT_STATUS_OPTIONS = ["试用期", "转正", "离职"] as const;
 const SYSTEM_STATUS_OPTIONS = [
-  { value: "pending", label: "pending" },
-  { value: "active", label: "active" },
-  { value: "inactive", label: "inactive" },
+  { value: "pending", label: "待审核" },
+  { value: "active", label: "激活" },
+  { value: "inactive", label: "停用" },
 ] as const;
 
 type EmploymentStatus = (typeof EMPLOYMENT_STATUS_OPTIONS)[number];

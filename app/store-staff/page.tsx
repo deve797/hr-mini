@@ -158,6 +158,14 @@ export default function StoreStaffPage() {
     loadPool();
   }, [loadPool]);
 
+  // 切换门店时清空搜索与提示，避免 HQ 切店后误操作
+  useEffect(() => {
+    setPoolSearch("");
+    setAddSearchQuery("");
+    setAddSearchResults([]);
+    setMsg("");
+  }, [effectiveStoreId]);
+
   // 全公司员工搜索（仅 HQ/finance 使用）
   useEffect(() => {
     if (!canEdit || !addSearchQuery.trim()) {
@@ -222,45 +230,27 @@ export default function StoreStaffPage() {
       .eq("employee_id", employeeId)
       .maybeSingle();
 
-    if (existing) {
-      if (existing.status === "active") {
-        setMsg("该员工已在本店员工池中");
-        setMsgType("info");
-      } else {
-        const { error: updateErr } = await supabase
-          .from("store_staff_pool")
-          .update({ status: "active" })
-          .eq("id", existing.id);
-        if (updateErr) {
-          console.error("恢复员工池记录失败:", updateErr);
-          setMsg("操作失败：" + (updateErr.message || "请稍后重试"));
-          setMsgType("error");
-        } else {
-          setMsg("已重新加入本店员工池");
-          setMsgType("success");
-          loadPool();
-        }
-      }
+    if (existing?.status === "active") {
+      setMsg("该员工已在本店员工池中");
+      setMsgType("info");
       setAddingId(null);
       return;
     }
 
-    const { error } = await supabase.from("store_staff_pool").insert([
-      { store_id: effectiveStoreId, employee_id: employeeId, status: "active" },
-    ]);
+    const { error } = await supabase
+      .from("store_staff_pool")
+      .upsert(
+        { store_id: effectiveStoreId, employee_id: employeeId, status: "active" },
+        { onConflict: "store_id,employee_id" }
+      );
     setAddingId(null);
     if (error) {
-      if (error.code === "23505" || error.message?.includes("unique") || error.message?.includes("duplicate")) {
-        setMsg("该员工已在员工池中");
-        setMsgType("info");
-      } else {
-        console.error("加入员工池失败:", error);
-        setMsg("加入失败：" + (error.message || "请稍后重试"));
-        setMsgType("error");
-      }
+      console.error("加入员工池失败:", error);
+      setMsg("加入失败：" + (error.message || "请稍后重试"));
+      setMsgType("error");
       return;
     }
-    setMsg("已加入本店员工池");
+    setMsg(existing ? "已重新加入本店员工池" : "已加入本店员工池");
     setMsgType("success");
     loadPool();
   };
