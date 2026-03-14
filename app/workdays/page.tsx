@@ -22,6 +22,8 @@ type MonthlyWorkdayRow = {
   store_id: string;
   employee_id: string;
   workdays: number;
+  trial_days?: number;
+  regular_days?: number;
   created_at: string;
   employees: { name: string | null; emp_no?: string | null } | null;
 };
@@ -170,7 +172,7 @@ export default function WorkdaysPage() {
     setMonthlyListLoading(true);
     const { data, error } = await supabase
       .from("monthly_workdays")
-      .select("id, month, store_id, employee_id, workdays, created_at, employees(name, emp_no)")
+      .select("id, month, store_id, employee_id, workdays, trial_days, regular_days, created_at, employees(name, emp_no)")
       .eq("store_id", storeId)
       .eq("month", month)
       .order("created_at", { ascending: false });
@@ -329,6 +331,16 @@ export default function WorkdaysPage() {
       return;
     }
 
+    const { data: empData } = await supabase
+      .from("employees")
+      .select("employment_status")
+      .eq("id", employeeId)
+      .maybeSingle();
+    const empStatus = (empData as { employment_status?: string } | null)?.employment_status ?? "转正";
+    const isTrial = empStatus === "试用期";
+    const trial_days = isTrial ? daysNum : 0;
+    const regular_days = isTrial ? 0 : daysNum;
+
     showMsg("提交中...", "info");
 
     const existing = monthlyList.find(
@@ -344,10 +356,12 @@ export default function WorkdaysPage() {
       setEmployeeId("");
     };
 
+    const payload = { workdays: daysNum, trial_days, regular_days };
+
     if (existing) {
       const { error: updateError } = await supabase
         .from("monthly_workdays")
-        .update({ workdays: daysNum })
+        .update(payload)
         .eq("id", existing.id);
 
       if (updateError) {
@@ -363,7 +377,7 @@ export default function WorkdaysPage() {
       employee_id: employeeId,
       store_id: storeId,
       month,
-      workdays: daysNum,
+      ...payload,
     };
     if (typeof window !== "undefined") console.log("[workdays] 提交 payload:", insertPayload);
     const { error: insertError } = await supabase.from("monthly_workdays").insert([insertPayload]);
@@ -385,7 +399,7 @@ export default function WorkdaysPage() {
         if (rows?.[0]) {
           const { error: retryErr } = await supabase
             .from("monthly_workdays")
-            .update({ workdays: daysNum })
+            .update(payload)
             .eq("id", (rows[0] as { id: string }).id);
           if (!retryErr) {
             onSuccess();
@@ -405,7 +419,8 @@ export default function WorkdaysPage() {
 
   const fillFormForEdit = (row: MonthlyWorkdayRow) => {
     setEmployeeId(row.employee_id);
-    setWorkdays(String(row.workdays));
+    const total = row.workdays ?? (row.trial_days ?? 0) + (row.regular_days ?? 0);
+    setWorkdays(String(total));
   };
 
   const removeRecord = async (id: string) => {
@@ -528,7 +543,8 @@ export default function WorkdaysPage() {
                 {monthlyList.map((r) => {
                   const nm = r.employees?.name ?? "未知";
                   const no = r.employees?.emp_no;
-                  const label = no ? `${nm} (${no})（已录 ${r.workdays} 天）` : `${nm}（已录 ${r.workdays} 天）`;
+                  const total = r.workdays ?? (r.trial_days ?? 0) + (r.regular_days ?? 0);
+                  const label = no ? `${nm} (${no})（已录 ${total} 天）` : `${nm}（已录 ${total} 天）`;
                   return (
                     <option key={r.id} value={r.employee_id}>
                       {label}
@@ -633,7 +649,7 @@ export default function WorkdaysPage() {
                         ? `${row.employees.name ?? "未知"} (${row.employees.emp_no})`
                         : (row.employees?.name ?? "未知")}
                     </span>
-                    <span className="muted-text" style={{ marginLeft: "0.5rem" }}>{row.workdays} 天</span>
+                    <span className="muted-text" style={{ marginLeft: "0.5rem" }}>{row.workdays ?? (row.trial_days ?? 0) + (row.regular_days ?? 0)} 天</span>
                     <div className="field-hint" style={{ marginTop: "0.25rem" }}>
                       更新于 {new Date(row.created_at).toLocaleString("zh-CN")}
                     </div>
