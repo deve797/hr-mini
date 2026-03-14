@@ -1,19 +1,27 @@
 "use client";
 
+/**
+ * 录工时双通道升级
+ * - 默认员工来源：本店员工池 store_staff_pool（仅本店可调用员工）
+ * - 跨店支援开关：默认关闭；开启后可搜索全公司 employees
+ * - 成功后自动入池：insert/update monthly_workdays 成功后，自动 upsert store_staff_pool
+ *   若店长无写权限（RLS 拒绝），则静默失败，录工时不受影响
+ */
+
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
 type Profile = { role: string | null; store_id: string | null } | null;
 
-type Employee = { id: string; name: string | null; emp_no?: string | null; employment_status?: string };
+type Employee = { id: string; name: string | null; emp_no?: string | null; employment_status?: string; phone?: string | null };
 
 type MonthlyWorkdayRow = {
   id: string;
   month: string;
   store_id: string;
   employee_id: string;
-  days: number;
+  workdays: number;
   created_at: string;
   employees: { name: string | null; emp_no?: string | null } | null;
 };
@@ -21,6 +29,15 @@ type MonthlyWorkdayRow = {
 function getCurrentMonthFirst(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+/** 根据 month (YYYY-MM-01) 返回当月首尾日期 */
+function getMonthRange(month: string): { monthStart: string; monthEnd: string } {
+  const [y, m] = month.split("-").map(Number);
+  const monthStart = `${y}-${String(m).padStart(2, "0")}-01`;
+  const lastDay = new Date(y, m, 0).getDate();
+  const monthEnd = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { monthStart, monthEnd };
 }
 
 function mapError(message: string): string {
@@ -44,7 +61,47 @@ function isStoreManager(profile: Profile): boolean {
   return profile?.role === "store_manager" && !!profile?.store_id;
 }
 
+/** 按录入月份判断保险是否覆盖：status=active 且 保险区间与 month 有重叠 */
+async function checkInsuredForMonth(employeeId: string, month: string): Promise<boolean> {
+  const { monthStart, monthEnd } = getMonthRange(month);
+  const { data } = await supabase
+    .from("employee_insurance")
+    .select("id")
+    .eq("employee_id", employeeId)
+    .eq("status", "active")
+    .lte("start_date", monthEnd)
+    .gte("end_date", monthStart)
+    .limit(1);
+  return !!(data && data.length > 0);
+}
+
+/** 录工时成功后尝试加入本店员工池；店长无写权限时 RLS 会拒绝，属预期，录工时不受影响 */
+async function tryAddToStorePool(
+  storeId: string,
+  employeeId: string,
+  onPoolFail?: () => void
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("store_staff_pool")
+      .upsert(
+        { store_id: storeId, employee_id: employeeId, status: "active" },
+        { onConflict: "store_id,employee_id" }
+      );
+    if (error) {
+      console.error("[store_staff_pool] 自动入池失败（店长无写权限时属预期）:", error);
+      onPoolFail?.();
+    } else {
+      console.log("[store_staff_pool] 已自动加入本店员工池:", employeeId);
+    }
+  } catch (e) {
+    console.error("[store_staff_pool] 自动入池异常:", e);
+    onPoolFail?.();
+  }
+}
+
 export default function WorkdaysPage() {
+  const [pageLoading, setPageLoading] = useState(true);
   const [profile, setProfile] = useState<Profile>(null);
   const [storeId, setStoreId] = useState<string>("");
   const [storeName, setStoreName] = useState<string>("");
@@ -58,10 +115,15 @@ export default function WorkdaysPage() {
   const [monthlyList, setMonthlyList] = useState<MonthlyWorkdayRow[]>([]);
   const [monthlyListLoading, setMonthlyListLoading] = useState(false);
 
+  const [poolStaff, setPoolStaff] = useState<Employee[]>([]);
+  const [poolLoading, setPoolLoading] = useState(false);
+
   const [employeesInMonth, setEmployeesInMonth] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Employee[]>([]);
   const [searching, setSearching] = useState(false);
+  const [crossStoreSupport, setCrossStoreSupport] = useState(false);
+  const [poolAddFailedHint, setPoolAddFailedHint] = useState(false);
 
   const isManager = isStoreManager(profile);
 
@@ -72,6 +134,7 @@ export default function WorkdaysPage() {
       setProfile(null);
       setStoreId("");
       setStoreName("");
+      setPageLoading(false);
       return;
     }
     const { data: profileData } = await supabase
@@ -96,6 +159,7 @@ export default function WorkdaysPage() {
       setStoreId("");
       setStoreName("");
     }
+    setPageLoading(false);
   }, []);
 
   const loadMonthlyList = useCallback(async () => {
@@ -106,7 +170,7 @@ export default function WorkdaysPage() {
     setMonthlyListLoading(true);
     const { data, error } = await supabase
       .from("monthly_workdays")
-      .select("id, month, store_id, employee_id, days, created_at, employees(name, emp_no)")
+      .select("id, month, store_id, employee_id, workdays, created_at, employees(name, emp_no)")
       .eq("store_id", storeId)
       .eq("month", month)
       .order("created_at", { ascending: false });
@@ -120,11 +184,42 @@ export default function WorkdaysPage() {
       const emps: Employee[] = list.map((row) => ({
         id: row.employee_id,
         name: row.employees?.name ?? "未知",
+        emp_no: row.employees?.emp_no,
       }));
       setEmployeesInMonth(emps);
     }
     setMonthlyListLoading(false);
   }, [storeId, month]);
+
+  const loadPoolStaff = useCallback(async () => {
+    if (!storeId) {
+      setPoolStaff([]);
+      return;
+    }
+    setPoolLoading(true);
+    const { data, error } = await supabase
+      .from("store_staff_pool")
+      .select("employee_id, employees(id, name, emp_no, phone)")
+      .eq("store_id", storeId)
+      .eq("status", "active");
+
+    if (error) {
+      console.error("加载本店员工池失败:", error);
+      setPoolStaff([]);
+    } else {
+      const rows = (data ?? []) as unknown as Array<{ employee_id: string; employees: { id: string; name: string | null; emp_no: string | null; phone: string | null } | null }>;
+      const emps: Employee[] = rows
+        .filter((r) => r.employees)
+        .map((r) => ({
+          id: r.employee_id,
+          name: r.employees?.name ?? "未知",
+          emp_no: r.employees?.emp_no ?? null,
+          phone: r.employees?.phone ?? null,
+        }));
+      setPoolStaff(emps);
+    }
+    setPoolLoading(false);
+  }, [storeId]);
 
   useEffect(() => {
     loadProfileAndStore();
@@ -135,16 +230,26 @@ export default function WorkdaysPage() {
   }, [loadMonthlyList]);
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    loadPoolStaff();
+  }, [loadPoolStaff]);
+
+  /** 跨店支援开启且至少2字符时，搜索 employees 全表 */
+  useEffect(() => {
+    if (!crossStoreSupport) {
       setSearchResults([]);
       return;
     }
     const t = searchQuery.trim();
+    if (t.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const safe = t.replace(/%/g, "");
     setSearching(true);
     supabase
       .from("employees")
-      .select("id, name, emp_no, employment_status")
-      .or(`name.ilike.%${t}%,emp_no.ilike.%${t}%`)
+      .select("id, name, emp_no, phone, employment_status")
+      .or(`name.ilike.%${safe}%,emp_no.ilike.%${safe}%,phone.ilike.%${safe}%`)
       .limit(20)
       .then(({ data, error }) => {
         if (error) {
@@ -155,41 +260,40 @@ export default function WorkdaysPage() {
         }
         setSearching(false);
       });
-  }, [searchQuery]);
+  }, [crossStoreSupport, searchQuery]);
+
+  const getFilteredPoolStaff = useCallback((): Employee[] => {
+    if (!searchQuery.trim()) return poolStaff;
+    const q = searchQuery.trim().toLowerCase();
+    return poolStaff.filter(
+      (e) =>
+        (e.name ?? "").toLowerCase().includes(q) ||
+        (e.emp_no ?? "").toLowerCase().includes(q) ||
+        (e.phone ?? "").includes(q)
+    );
+  }, [poolStaff, searchQuery]);
 
   const allSelectableEmployees = useCallback(() => {
     const byId = new Map<string, Employee>();
     employeesInMonth.forEach((e) => byId.set(e.id, e));
-    searchResults.forEach((e) => byId.set(e.id, e));
+    if (crossStoreSupport) {
+      searchResults.forEach((e) => byId.set(e.id, e));
+    } else {
+      getFilteredPoolStaff().forEach((e) => byId.set(e.id, e));
+    }
     return Array.from(byId.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-  }, [employeesInMonth, searchResults]);
+  }, [employeesInMonth, crossStoreSupport, searchResults, getFilteredPoolStaff]);
 
   useEffect(() => {
-    if (!employeeId) {
+    if (!employeeId || !month) {
       setSelectedEmployeeInsured(null);
       return;
     }
     (async () => {
-      let isInsured = false;
-      const { data: viewData, error: viewError } = await supabase
-        .from("v_employee_insurance_status")
-        .select("is_insured")
-        .eq("employee_id", employeeId)
-        .maybeSingle();
-      if (!viewError && viewData?.is_insured === true) isInsured = true;
-      if (!isInsured) {
-        const { data: directData } = await supabase
-          .from("employee_insurance")
-          .select("id")
-          .eq("employee_id", employeeId)
-          .eq("status", "active")
-          .gte("end_date", new Date().toISOString().slice(0, 10))
-          .limit(1);
-        if (directData && directData.length > 0) isInsured = true;
-      }
+      const isInsured = await checkInsuredForMonth(employeeId, month);
       setSelectedEmployeeInsured(isInsured);
     })();
-  }, [employeeId]);
+  }, [employeeId, month]);
 
   const showMsg = (text: string, type: "info" | "error" | "success") => {
     setMsg(text);
@@ -219,25 +323,9 @@ export default function WorkdaysPage() {
       return;
     }
 
-    let isInsured = false;
-    const { data: viewData, error: viewError } = await supabase
-      .from("v_employee_insurance_status")
-      .select("is_insured")
-      .eq("employee_id", employeeId)
-      .maybeSingle();
-    if (!viewError && viewData?.is_insured === true) isInsured = true;
+    const isInsured = await checkInsuredForMonth(employeeId, month);
     if (!isInsured) {
-      const { data: directData } = await supabase
-        .from("employee_insurance")
-        .select("id")
-        .eq("employee_id", employeeId)
-        .eq("status", "active")
-        .gte("end_date", new Date().toISOString().slice(0, 10))
-        .limit(1);
-      if (directData && directData.length > 0) isInsured = true;
-    }
-    if (!isInsured) {
-      showMsg("该员工没有购买意外险，不能输入考勤", "error");
+      showMsg("该员工在该月没有购买意外险，不能输入考勤", "error");
       return;
     }
 
@@ -247,10 +335,19 @@ export default function WorkdaysPage() {
       (r) => r.employee_id === employeeId && r.store_id === storeId && r.month === month
     );
 
+    const onSuccess = () => {
+      setPoolAddFailedHint(false);
+      tryAddToStorePool(storeId, employeeId, () => setPoolAddFailedHint(true));
+      showMsg("已提交", "success");
+      loadMonthlyList();
+      setWorkdays("");
+      setEmployeeId("");
+    };
+
     if (existing) {
       const { error: updateError } = await supabase
         .from("monthly_workdays")
-        .update({ days: daysNum })
+        .update({ workdays: daysNum })
         .eq("id", existing.id);
 
       if (updateError) {
@@ -258,21 +355,18 @@ export default function WorkdaysPage() {
         showMsg("更新失败：" + mapError(updateError.message), "error");
         return;
       }
-      showMsg("已更新", "success");
-      loadMonthlyList();
-      setWorkdays("");
-      setEmployeeId("");
+      onSuccess();
       return;
     }
 
-    const { error: insertError } = await supabase.from("monthly_workdays").insert([
-      {
-        employee_id: employeeId,
-        store_id: storeId,
-        month,
-        days: daysNum,
-      },
-    ]);
+    const insertPayload = {
+      employee_id: employeeId,
+      store_id: storeId,
+      month,
+      workdays: daysNum,
+    };
+    if (typeof window !== "undefined") console.log("[workdays] 提交 payload:", insertPayload);
+    const { error: insertError } = await supabase.from("monthly_workdays").insert([insertPayload]);
 
     if (insertError) {
       if (
@@ -291,13 +385,10 @@ export default function WorkdaysPage() {
         if (rows?.[0]) {
           const { error: retryErr } = await supabase
             .from("monthly_workdays")
-            .update({ days: daysNum })
+            .update({ workdays: daysNum })
             .eq("id", (rows[0] as { id: string }).id);
           if (!retryErr) {
-            showMsg("已更新", "success");
-            loadMonthlyList();
-            setWorkdays("");
-            setEmployeeId("");
+            onSuccess();
           } else {
             showMsg("更新失败，请稍后重试", "error");
           }
@@ -309,15 +400,12 @@ export default function WorkdaysPage() {
       return;
     }
 
-    showMsg("已提交", "success");
-    loadMonthlyList();
-    setWorkdays("");
-    setEmployeeId("");
+    onSuccess();
   };
 
   const fillFormForEdit = (row: MonthlyWorkdayRow) => {
     setEmployeeId(row.employee_id);
-    setWorkdays(String(row.days));
+    setWorkdays(String(row.workdays));
   };
 
   const removeRecord = async (id: string) => {
@@ -337,11 +425,26 @@ export default function WorkdaysPage() {
   };
 
   const selectables = allSelectableEmployees();
+  const filteredPool = getFilteredPoolStaff();
+
+  if (pageLoading) {
+    return (
+      <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <p className="muted-text">加载中…</p>
+      </main>
+    );
+  }
 
   if (profile === null) {
     return (
       <main className="page-container" style={{ maxWidth: 32 * 16 }}>
-        <p className="muted-text">加载中…</p>
+        <p className="body-text" style={{ color: "var(--foreground)" }}>请先登录</p>
+        <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "0.5rem", display: "inline-flex" }}>
+          返回个人页
+        </Link>
+        <Link href="/login" className="btn btn-outline btn-sm" style={{ marginTop: "0.5rem", marginLeft: "0.5rem", display: "inline-flex" }}>
+          去登录
+        </Link>
       </main>
     );
   }
@@ -395,11 +498,20 @@ export default function WorkdaysPage() {
         <div className="field">
           <label className="field-label">员工</label>
           <p className="field-hint" style={{ marginBottom: "0.25rem" }}>
-            可选：本月已录入员工，或下方搜索添加其他员工
+            默认：本月已录入 + 本店员工池。开启「跨店支援」可搜索全公司员工
           </p>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", fontSize: "0.875rem" }}>
+            <input
+              type="checkbox"
+              checked={crossStoreSupport}
+              onChange={(e) => setCrossStoreSupport(e.target.checked)}
+              style={{ width: "1rem", height: "1rem" }}
+            />
+            <span>跨店支援员工（搜索全公司）</span>
+          </label>
           <input
             type="text"
-            placeholder="搜索员工姓名或工号"
+            placeholder={crossStoreSupport ? "搜索姓名/工号/手机（至少2字）" : "在本店员工池中搜索"}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="input"
@@ -416,7 +528,7 @@ export default function WorkdaysPage() {
                 {monthlyList.map((r) => {
                   const nm = r.employees?.name ?? "未知";
                   const no = r.employees?.emp_no;
-                  const label = no ? `${nm} (${no})（已录 ${r.days} 天）` : `${nm}（已录 ${r.days} 天）`;
+                  const label = no ? `${nm} (${no})（已录 ${r.workdays} 天）` : `${nm}（已录 ${r.workdays} 天）`;
                   return (
                     <option key={r.id} value={r.employee_id}>
                       {label}
@@ -425,8 +537,17 @@ export default function WorkdaysPage() {
                 })}
               </optgroup>
             )}
-            {searchResults.length > 0 && (
-              <optgroup label="搜索结果">
+            {filteredPool.length > 0 && (
+              <optgroup label="本店员工池">
+                {filteredPool.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.emp_no ? `${e.name ?? "未知"} (${e.emp_no})` : (e.name ?? "未知")}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {crossStoreSupport && searchResults.length > 0 && (
+              <optgroup label="跨店支援搜索结果">
                 {searchResults.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.emp_no ? `${e.name ?? "未知"} (${e.emp_no})` : (e.name ?? "未知")}
@@ -436,7 +557,7 @@ export default function WorkdaysPage() {
             )}
             {selectables.length === 0 && !searching && (
               <option value="" disabled>
-                {monthlyListLoading ? "加载中…" : "请先搜索员工或等待本月列表加载"}
+                {monthlyListLoading || poolLoading ? "加载中…" : crossStoreSupport ? "开启跨店支援后输入至少2字搜索，或从本店员工池选择" : "请从本店员工池选择或开启跨店支援搜索"}
               </option>
             )}
           </select>
@@ -444,7 +565,7 @@ export default function WorkdaysPage() {
 
         {selectedEmployeeInsured === false && (
           <div className="card msg-error" style={{ padding: "0.75rem 1rem" }}>
-            该员工没有购买意外险，不能输入考勤
+            该员工在该月没有购买意外险，不能输入考勤
           </div>
         )}
 
@@ -476,6 +597,11 @@ export default function WorkdaysPage() {
         <div className={msgType === "error" ? "msg-error" : msgType === "success" ? "msg-success" : "msg-info"}>
           {msg || "\u00A0"}
         </div>
+        {poolAddFailedHint && (
+          <p className="field-hint" style={{ color: "var(--muted-foreground)" }}>
+            已录工时，但自动加入员工池失败，请联系总部维护员工池
+          </p>
+        )}
       </div>
 
       <section style={{ marginTop: "2rem" }}>
@@ -507,7 +633,7 @@ export default function WorkdaysPage() {
                         ? `${row.employees.name ?? "未知"} (${row.employees.emp_no})`
                         : (row.employees?.name ?? "未知")}
                     </span>
-                    <span className="muted-text" style={{ marginLeft: "0.5rem" }}>{row.days} 天</span>
+                    <span className="muted-text" style={{ marginLeft: "0.5rem" }}>{row.workdays} 天</span>
                     <div className="field-hint" style={{ marginTop: "0.25rem" }}>
                       更新于 {new Date(row.created_at).toLocaleString("zh-CN")}
                     </div>
