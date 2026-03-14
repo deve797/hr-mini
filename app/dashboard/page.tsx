@@ -77,6 +77,12 @@ export default function DashboardPage() {
           description: "审核本店当月工资，供财务确认提交",
           href: "/payroll-verify",
         },
+        {
+          key: "store-staff",
+          title: "门店人员配置",
+          description: "管理本店员工池，配置可调用员工",
+          href: "/store-staff",
+        },
       ];
     }
     if (profile?.role === "hq" || profile?.role === "finance") {
@@ -92,6 +98,12 @@ export default function DashboardPage() {
           title: "薪酬管理",
           description: "核对与管理员工薪酬",
           href: "/payroll",
+        },
+        {
+          key: "store-staff",
+          title: "门店人员配置",
+          description: "查看与管理门店员工池",
+          href: "/store-staff",
         },
       ];
     }
