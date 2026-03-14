@@ -138,7 +138,12 @@ export default function StoreStaffPage() {
       setMsg("加载失败：" + (error.message || "请稍后重试"));
       setMsgType("error");
     } else {
-      setPoolRows((data as PoolRow[]) ?? []);
+      const rows = (data ?? []).map((row: Record<string, unknown>) => {
+        const emp = row.employees;
+        const employee = Array.isArray(emp) ? emp[0] ?? null : (emp ?? null);
+        return { ...row, employees: employee } as PoolRow;
+      });
+      setPoolRows(rows);
     }
     setPoolLoading(false);
   }, [effectiveStoreId]);
