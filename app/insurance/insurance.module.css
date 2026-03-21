@@ -7,6 +7,19 @@
   font-family: var(--font-body);
 }
 
+.pageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.pageHeader .title {
+  margin-bottom: 0;
+}
+
 .title {
   font-family: var(--font-heading);
   font-size: 1.5rem;

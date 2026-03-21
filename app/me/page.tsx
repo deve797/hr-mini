@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type Profile = {
@@ -11,19 +10,16 @@ type Profile = {
 } | null;
 
 export default function MePage() {
-  const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!loading && profile?.role === "store_manager") {
-      const t = setTimeout(() => router.replace("/"), 2000);
-      return () => clearTimeout(t);
-    }
-  }, [loading, profile?.role, router]);
+  const [linkedEmployee, setLinkedEmployee] = useState<{
+    id: string;
+    emp_no: string | null;
+    name: string | null;
+  } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -52,6 +48,19 @@ export default function MePage() {
       }
 
       setProfile(profileData ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null } : null);
+
+      const { data: empRow, error: empErr } = await supabase
+        .from("employees")
+        .select("id, emp_no, name")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (empErr) {
+        console.error("employees user_id 查询失败:", empErr);
+        setLinkedEmployee(null);
+      } else {
+        setLinkedEmployee(empRow ?? null);
+      }
+
       setLoading(false);
     })();
   }, []);
@@ -101,9 +110,15 @@ export default function MePage() {
             未在 users_profile 中查到该 user_id 的记录（请检查表主键是 id 还是 user_id，以及是否有对应行）
           </div>
         )}
-        {profile?.role === "store_manager" && (
-          <div style={{ marginTop: "1rem", color: "var(--primary)", fontSize: "0.8125rem" }}>
-            2 秒后返回主页进行操作
+        {linkedEmployee && (
+          <div className="body-text" style={{ marginTop: "1rem", color: "var(--foreground)" }}>
+            <strong>绑定员工档案：</strong>
+            {linkedEmployee.name ?? "—"}（工号 {linkedEmployee.emp_no ?? "—"}）
+          </div>
+        )}
+        {!linkedEmployee && profile && (
+          <div className="muted-text" style={{ marginTop: "1rem", fontSize: "0.875rem" }}>
+            未绑定员工档案：店长可在「员工入职」勾选绑定本人，或由管理员在数据库为 employees.user_id 赋值。
           </div>
         )}
       </div>

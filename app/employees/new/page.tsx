@@ -91,26 +91,48 @@ export default function NewEmployeePage() {
   const [lastCreatedEmpNo, setLastCreatedEmpNo] = useState<string | null>(null);
   const [lastCreatedName, setLastCreatedName] = useState<string | null>(null);
   const [insuranceRequestFailed, setInsuranceRequestFailed] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [recentEmployees, setRecentEmployees] = useState<RecentEmployee[]>([]);
   const [recentLoading, setRecentLoading] = useState(false);
+  /** 店长：将本条 employees 与当前登录账号绑定，便于本人考勤/工资/员工池 */
+  const [bindLoginUser, setBindLoginUser] = useState(false);
 
   const loadProfileAndOptions = useCallback(async () => {
     const { data: authData } = await supabase.auth.getUser();
     const user = authData?.user ?? null;
     if (!user) {
+      setUserId(null);
+      setProfile(null);
+      setProfileError(null);
       setLoading(false);
       return;
     }
-    const { data: profileData } = await supabase
+    setUserId(user.id);
+    const { data: profileData, error: profileErr } = await supabase
       .from("users_profile")
       .select("role, store_id")
       .eq("user_id", user.id)
       .maybeSingle();
-    const p: Profile = profileData
-      ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null }
-      : null;
+    if (profileErr) {
+      console.error("users_profile 查询失败:", profileErr);
+      setProfileError(profileErr.message);
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+    setProfileError(null);
+    if (!profileData) {
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+    const p: Profile = {
+      role: profileData.role ?? null,
+      store_id: profileData.store_id ?? null,
+    };
     setProfile(p);
 
     const isManager = isStoreManager(p);
@@ -284,6 +306,13 @@ export default function NewEmployeePage() {
       const no = empNoManual.trim();
       if (!/^[A-Za-z0-9\-_]+$/.test(no)) return { ok: false, message: "员工编号仅允许字母、数字、横线、下划线" };
     }
+    if (bindLoginUser) {
+      if (!userId) return { ok: false, message: "未登录，无法绑定账号" };
+      if (!isStoreManager(profile)) return { ok: false, message: "仅店长可将档案绑定为当前登录账号" };
+      if (profile?.store_id && currentStoreId !== profile.store_id) {
+        return { ok: false, message: "绑定本人时，当前门店须与账号绑定门店一致" };
+      }
+    }
     return { ok: true, message: "" };
   }
 
@@ -340,6 +369,22 @@ export default function NewEmployeePage() {
     const trimmedPhone = phone.trim().replace(/\s/g, "");
     const trimmedIdCard = idCard.trim();
 
+    if (bindLoginUser && userId) {
+      const { data: existingUserLink } = await supabase
+        .from("employees")
+        .select("id, emp_no")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (existingUserLink) {
+        setMsg(
+          `当前登录账号已绑定员工档案（工号：${(existingUserLink as { emp_no?: string }).emp_no ?? "—"}），请勿重复绑定`
+        );
+        setMsgType("error");
+        setSubmitLoading(false);
+        return;
+      }
+    }
+
     const { data: existingPhone } = await supabase
       .from("employees")
       .select("id")
@@ -378,8 +423,9 @@ export default function NewEmployeePage() {
       work_shift: payload.work_shift,
       hire_date: payload.hire_date,
       ...(payload.emp_no !== undefined && payload.emp_no !== '' ? { emp_no: payload.emp_no } : {}),
+      ...(bindLoginUser && userId ? { user_id: userId } : {}),
     };
-    
+
     const { data: inserted, error } = await supabase
       .from("employees")
       .insert([insertPayload])
@@ -395,6 +441,10 @@ export default function NewEmployeePage() {
           setMsg("该手机号已存在，请确认是否重复录入");
         } else if (errMsg.toLowerCase().includes("id_card") || errMsg.includes("身份证")) {
           setMsg("该身份证号已存在，请确认是否重复录入");
+        } else if (errMsg.toLowerCase().includes("user_id")) {
+          setMsg(
+            "该登录账号已绑定其他员工档案，或数据库尚未添加 employees.user_id（请执行 scripts/employees_user_id_setup.sql）"
+          );
         } else {
           setMsg("数据冲突，请检查是否重复录入后重试");
         }
@@ -448,6 +498,7 @@ export default function NewEmployeePage() {
     if (workShiftOptions.length > 0) setWorkShift(workShiftOptions[0].value);
     setHireDate(DEFAULT_HIRE_DATE());
     setApplyInsurance(false);
+    setBindLoginUser(false);
     if (importMode) {
       setEmpNoManual("");
       setImportMode(false);
@@ -458,14 +509,26 @@ export default function NewEmployeePage() {
   if (loading) {
     return (
       <main className="page-container" style={{ maxWidth: 28 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>员工入职</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="muted-text">加载中...</p>
       </main>
     );
   }
 
-  if (!profile) {
+  if (!userId) {
     return (
       <main className="page-container" style={{ maxWidth: 28 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>员工入职</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="muted-text">请先登录。</p>
         <Link href="/login" className="btn btn-ghost btn-sm" style={{ marginTop: "0.75rem", display: "inline-flex" }}>
           去登录
@@ -474,10 +537,51 @@ export default function NewEmployeePage() {
     );
   }
 
+  if (profileError) {
+    return (
+      <main className="page-container" style={{ maxWidth: 28 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>员工入职</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
+        <p className="msg-error">查询 users_profile 失败：{profileError}</p>
+        <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "0.75rem", display: "inline-flex" }}>
+          返回个人页
+        </Link>
+      </main>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <main className="page-container" style={{ maxWidth: 28 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>员工入职</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
+        <p className="muted-text">
+          已登录，但未在 users_profile 中查到该账号的角色与门店绑定，请联系总部管理员。
+        </p>
+        <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "0.75rem", display: "inline-flex" }}>
+          查看账号信息
+        </Link>
+      </main>
+    );
+  }
+
   if (isFinance(profile)) {
     return (
       <main className="page-container" style={{ maxWidth: 28 * 16 }}>
-        <h1 className="heading-1">员工入职</h1>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>员工入职</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="muted-text" style={{ marginTop: "0.5rem" }}>您当前无权限在此页面新增员工。</p>
         <Link href="/workdays" className="btn btn-outline btn-sm" style={{ marginTop: "0.75rem", display: "inline-flex" }}>
           返回工作天数
@@ -489,7 +593,10 @@ export default function NewEmployeePage() {
   return (
     <main className="page-container" style={{ maxWidth: 28 * 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-        <h1 className="heading-1">员工入职</h1>
+        <h1 className="heading-1" style={{ marginBottom: 0 }}>员工入职</h1>
+        <Link href="/" className="btn btn-outline btn-sm">
+          返回主页
+        </Link>
         <Link href="/workdays" className="btn btn-outline btn-sm">
           返回工作天数
         </Link>
@@ -505,6 +612,55 @@ export default function NewEmployeePage() {
       </p>
 
       <div style={{ maxWidth: 25 * 16 }}>
+        {isStoreManager(profile) ? (
+          <div
+            className="card"
+            style={{
+              padding: "1rem 1.25rem",
+              marginBottom: "1.25rem",
+              borderColor: "color-mix(in srgb, var(--primary) 25%, var(--border))",
+              background: "color-mix(in srgb, var(--primary) 10%, var(--card-bg))",
+            }}
+          >
+            <p className="body-text" style={{ margin: 0, fontWeight: 700, color: "var(--foreground)" }}>
+              店长推荐顺序
+            </p>
+            <ol
+              style={{
+                margin: "0.5rem 0 0 1.25rem",
+                padding: 0,
+                fontSize: "0.9375rem",
+                lineHeight: 1.65,
+                color: "var(--muted-foreground)",
+              }}
+            >
+              <li>先为本人（及店员）做「员工入职」；本人务必勾选下方「绑定当前登录账号」。</li>
+              <li>「投保申请」提交意外险，待总部激活。</li>
+              <li>「录入工作天数」选择员工（含本人）录入本月工时，供财务算薪。</li>
+            </ol>
+          </div>
+        ) : null}
+
+        {isStoreManager(profile) && userId ? (
+          <div className="field" style={{ marginBottom: "1rem" }}>
+            <label
+              className="field-label"
+              style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", cursor: "pointer", fontWeight: 500 }}
+            >
+              <input
+                type="checkbox"
+                checked={bindLoginUser}
+                onChange={(e) => setBindLoginUser(e.target.checked)}
+                style={{ marginTop: "0.2rem" }}
+              />
+              <span>将本条档案绑定为当前登录账号（本人考勤、工资分摊与员工池）</span>
+            </label>
+            <p className="field-hint" style={{ marginTop: "0.35rem", marginLeft: "1.5rem" }}>
+              勾选后会把 <code>employees.user_id</code> 设为当前用户；每个账号仅能绑定一条档案。若已有档案需补绑，请在 Supabase 中对该员工行执行 UPDATE，勿重复录入。
+            </p>
+          </div>
+        ) : null}
+
         <div className="field">
           <label className="field-label">姓名 *</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="员工姓名" className="input" />

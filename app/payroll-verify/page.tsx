@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./page.module.css";
 
@@ -35,7 +34,6 @@ function isStoreManager(profile: Profile): boolean {
 }
 
 export default function PayrollVerifyPage() {
-  const router = useRouter();
   const [profile, setProfile] = useState<Profile>(null);
   const [storeName, setStoreName] = useState<string>("");
   const [month, setMonth] = useState<string>(() => monthStartISO(new Date().toISOString()));
@@ -43,6 +41,11 @@ export default function PayrollVerifyPage() {
   const [rows, setRows] = useState<PayrollRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+  const [linkedSelfEmployee, setLinkedSelfEmployee] = useState<{
+    name: string | null;
+    emp_no: string | null;
+  } | null>(null);
+  const [linkedSelfChecked, setLinkedSelfChecked] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -50,6 +53,8 @@ export default function PayrollVerifyPage() {
       const user = authData?.user ?? null;
       if (!user) {
         setProfile(null);
+        setLinkedSelfEmployee(null);
+        setLinkedSelfChecked(false);
         setLoading(false);
         return;
       }
@@ -63,6 +68,8 @@ export default function PayrollVerifyPage() {
         : null;
       setProfile(p);
       if (!isStoreManager(p) || !p?.store_id) {
+        setLinkedSelfEmployee(null);
+        setLinkedSelfChecked(true);
         setLoading(false);
         return;
       }
@@ -72,6 +79,13 @@ export default function PayrollVerifyPage() {
         .eq("id", p.store_id)
         .maybeSingle();
       setStoreName(storeData?.name ?? "本门店");
+      const { data: linkEmp } = await supabase
+        .from("employees")
+        .select("name, emp_no")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      setLinkedSelfEmployee(linkEmp ?? null);
+      setLinkedSelfChecked(true);
       setLoading(false);
     })();
   }, []);
@@ -143,7 +157,12 @@ export default function PayrollVerifyPage() {
   if (loading) {
     return (
       <main className="page-container">
-        <h1 className="heading-1">薪资核对</h1>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>薪资核对</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="muted-text">加载中…</p>
       </main>
     );
@@ -152,11 +171,13 @@ export default function PayrollVerifyPage() {
   if (!isStoreManager(profile) || !profile?.store_id) {
     return (
       <main className="page-container">
-        <h1 className="heading-1">薪资核对</h1>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>薪资核对</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="muted-text">仅店长可访问，请使用店长账号登录。</p>
-        <Link href="/dashboard" className="btn btn-outline" style={{ marginTop: "1rem" }}>
-          返回工作台
-        </Link>
       </main>
     );
   }
@@ -167,13 +188,41 @@ export default function PayrollVerifyPage() {
         <h1 className="heading-1" style={{ marginBottom: 0 }}>
           薪资核对
         </h1>
-        <Link href="/dashboard" className="btn btn-ghost btn-sm">
-          返回工作台
+        <Link href="/" className="btn btn-outline btn-sm">
+          返回主页
         </Link>
       </div>
       <p className="muted-text" style={{ marginTop: "0.5rem" }}>
         {storeName} · 审核本店当月工资，供财务确认提交
       </p>
+
+      {linkedSelfChecked && !linkedSelfEmployee ? (
+        <div
+          className="card"
+          style={{
+            marginTop: "1rem",
+            padding: "1rem 1.25rem",
+            borderColor: "color-mix(in srgb, var(--secondary) 40%, var(--border))",
+            background: "color-mix(in srgb, var(--secondary) 8%, var(--card-bg))",
+          }}
+        >
+          <p className="body-text" style={{ margin: 0, fontWeight: 600 }}>
+            尚未绑定本人员工档案
+          </p>
+          <p className="field-hint" style={{ marginTop: "0.5rem", marginBottom: "0.75rem" }}>
+            本人工资出现在列表前，需先在「员工入职」建档并勾选绑定登录账号，并完成投保与工时录入。
+          </p>
+          <Link href="/employees/new" className="btn btn-primary btn-sm" style={{ display: "inline-flex" }}>
+            去员工入职
+          </Link>
+        </div>
+      ) : null}
+
+      {linkedSelfChecked && linkedSelfEmployee ? (
+        <p className="field-hint" style={{ marginTop: "1rem" }}>
+          本人档案：{linkedSelfEmployee.name ?? "—"}（{linkedSelfEmployee.emp_no ?? "—"}）· 列表中应包含本人工资行（需财务已跑算薪）。
+        </p>
+      ) : null}
 
       <div className={styles.toolbar} style={{ marginTop: "1.25rem" }}>
         <div className="field">

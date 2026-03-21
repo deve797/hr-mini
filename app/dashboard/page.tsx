@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -19,11 +20,29 @@ function isStoreManager(profile: Profile): boolean {
   return profile?.role === "store_manager" && !!profile?.store_id;
 }
 
+function WelcomeBrandMark() {
+  return (
+    <div className={styles.welcomeImageSlot} aria-hidden>
+      <Image
+        src="/brand-zuolinyouguo.png"
+        alt=""
+        fill
+        sizes="64px"
+        className={styles.welcomeLogo}
+        priority
+      />
+    </div>
+  );
+}
+
+type LinkedSelfEmployee = { name: string | null; emp_no: string | null } | null;
+
 export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile>(null);
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [linkedSelfEmployee, setLinkedSelfEmployee] = useState<LinkedSelfEmployee>(null);
 
   useEffect(() => {
     (async () => {
@@ -32,6 +51,7 @@ export default function DashboardPage() {
       if (!user) {
         setLoggedIn(false);
         setProfile(null);
+        setLinkedSelfEmployee(null);
         setLoading(false);
         return;
       }
@@ -41,11 +61,22 @@ export default function DashboardPage() {
         .select("role, store_id")
         .eq("user_id", user.id)
         .maybeSingle();
-      setProfile(
-        profileData
-          ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null }
-          : null
-      );
+      const nextProfile: Profile = profileData
+        ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null }
+        : null;
+      setProfile(nextProfile);
+
+      if (nextProfile?.role === "store_manager" && nextProfile.store_id) {
+        const { data: empRow } = await supabase
+          .from("employees")
+          .select("name, emp_no")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        setLinkedSelfEmployee(empRow ?? null);
+      } else {
+        setLinkedSelfEmployee(null);
+      }
+
       setLoading(false);
     })();
   }, []);
@@ -54,21 +85,21 @@ export default function DashboardPage() {
     if (isStoreManager(profile)) {
       return [
         {
-          key: "insurance-request",
-          title: "投保申请",
-          description: "为新员工提交意外险投保申请",
-          href: "/insurance-request",
-        },
-        {
           key: "employees-new",
           title: "员工入职",
-          description: "为门店新员工创建入职信息",
+          description: "先建档：含店长本人，勾选绑定登录账号后再投保与录工时",
           href: "/employees/new",
+        },
+        {
+          key: "insurance-request",
+          title: "投保申请",
+          description: "为新员工提交意外险（本人需先完成建档与投保）",
+          href: "/insurance-request",
         },
         {
           key: "workdays",
           title: "录入工作天数",
-          description: "录入员工本月工作天数（需已投保）",
+          description: "已投保员工（含本人）录入本月工时，供财务算薪",
           href: "/workdays",
         },
         {
@@ -133,7 +164,7 @@ export default function DashboardPage() {
               <span className={styles.welcomeLine1}>欢迎来到左林右果</span>
               <span className={styles.welcomeLine2}>人事管理系统</span>
             </div>
-            <div className={styles.welcomeImageSlot} aria-hidden />
+            <WelcomeBrandMark />
           </header>
           <div className={styles.intro}>
             <h1>工作台</h1>
@@ -153,7 +184,7 @@ export default function DashboardPage() {
               <span className={styles.welcomeLine1}>欢迎来到左林右果</span>
               <span className={styles.welcomeLine2}>人事管理系统</span>
             </div>
-            <div className={styles.welcomeImageSlot} aria-hidden />
+            <WelcomeBrandMark />
           </header>
           <div className={styles.intro}>
             <h1>工作台</h1>
@@ -177,13 +208,41 @@ export default function DashboardPage() {
             <span className={styles.welcomeLine1}>欢迎来到左林右果</span>
             <span className={styles.welcomeLine2}>人事管理系统</span>
           </div>
-          <div className={styles.welcomeImageSlot} aria-hidden />
+          <WelcomeBrandMark />
         </header>
 
         <div className={styles.intro}>
           <h1>工作台</h1>
           <p>当前角色：{roleLabel}</p>
         </div>
+
+        {isStoreManager(profile) ? (
+          linkedSelfEmployee ? (
+            <div className={`${styles.managerFlow} ${styles.managerFlowOk}`} role="status">
+              <div className={styles.managerFlowTitle}>店长本人档案已绑定</div>
+              <p style={{ margin: 0, color: "var(--muted-foreground)" }}>
+                {linkedSelfEmployee.name ?? "—"}（工号 {linkedSelfEmployee.emp_no ?? "—"}）· 可按顺序完成投保、录工时、薪资核对。
+              </p>
+            </div>
+          ) : (
+            <div className={`${styles.managerFlow} ${styles.managerFlowWarn}`} role="region" aria-label="店长流程">
+              <div className={styles.managerFlowTitle}>店长标准流程（参与本人考勤与工资）</div>
+              <ol>
+                <li>
+                  在「员工入职」填写<strong>本人</strong>信息，勾选「将本条档案绑定为当前登录账号」。
+                </li>
+                <li>在「投保申请」为本人提交意外险，待总部处理。</li>
+                <li>在「录入工作天数」选择本人（需已投保）录入工时。</li>
+                <li>财务算薪后，在「薪资核对」审核本店数据。</li>
+              </ol>
+              <p style={{ margin: "0.75rem 0 0 0", fontSize: "0.875rem" }}>
+                <Link href="/employees/new" className="btn btn-primary btn-sm" style={{ display: "inline-flex" }}>
+                  去员工入职
+                </Link>
+              </p>
+            </div>
+          )
+        ) : null}
 
         {tiles.length > 0 ? (
           <section className={styles.grid} aria-label="可操作模块">

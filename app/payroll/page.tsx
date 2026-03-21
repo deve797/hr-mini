@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./payroll.module.css";
 
@@ -47,6 +48,7 @@ function monthStartISO(input: string) {
 }
 
 export default function PayrollPage() {
+  const router = useRouter();
   const [month, setMonth] = useState<string>("2026-03-01");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -206,11 +208,21 @@ export default function PayrollPage() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   };
 
+  const handleGoHome = () => {
+    router.replace("/");
+    router.refresh();
+  };
+
   return (
     <main className={`page-container ${styles.wrap}`}>
-      <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>
-        工资与分摊（财务）
-      </h1>
+      <div className={styles.pageHeader}>
+        <h1 className="heading-1" style={{ marginBottom: 0 }}>
+          工资与分摊（财务）
+        </h1>
+        <button type="button" onClick={handleGoHome} className="btn btn-outline btn-sm">
+          返回主页
+        </button>
+      </div>
 
       <div className={styles.toolbar}>
         <div className="field">

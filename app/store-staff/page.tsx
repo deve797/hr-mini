@@ -50,6 +50,8 @@ function getEmployeeDisplayName(emp: { name: string | null; emp_no: string | nul
 }
 
 export default function StoreStaffPage() {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [stores, setStores] = useState<Store[]>([]);
@@ -77,17 +79,28 @@ export default function StoreStaffPage() {
     const { data: authData } = await supabase.auth.getUser();
     const user = authData?.user ?? null;
     if (!user) {
+      setUserId(null);
       setProfile(null);
+      setProfileError(null);
       setEmail(null);
       setProfileLoading(false);
       return;
     }
+    setUserId(user.id);
     setEmail(user.email ?? null);
-    const { data: profileData } = await supabase
+    const { data: profileData, error: profileErr } = await supabase
       .from("users_profile")
       .select("role, store_id")
       .eq("user_id", user.id)
       .maybeSingle();
+    if (profileErr) {
+      console.error("users_profile 查询失败:", profileErr);
+      setProfileError(profileErr.message);
+      setProfile(null);
+      setProfileLoading(false);
+      return;
+    }
+    setProfileError(null);
     const p: Profile = profileData
       ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null }
       : null;
@@ -277,10 +290,44 @@ export default function StoreStaffPage() {
   if (profileLoading) {
     return (
       <main className="page-container" style={{ maxWidth: 32 * 16 }}>
-        <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>
-          门店人员配置（员工池）
-        </h1>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>门店人员配置（员工池）</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="muted-text">加载中…</p>
+      </main>
+    );
+  }
+
+  if (!userId) {
+    return (
+      <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>门店人员配置（员工池）</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
+        <p className="muted-text">请先登录</p>
+        <Link href="/login" className="btn btn-primary" style={{ marginTop: "1rem", display: "inline-flex" }}>
+          去登录
+        </Link>
+      </main>
+    );
+  }
+
+  if (profileError) {
+    return (
+      <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>门店人员配置（员工池）</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
+        <p className="msg-error">查询 users_profile 失败：{profileError}</p>
       </main>
     );
   }
@@ -288,12 +335,17 @@ export default function StoreStaffPage() {
   if (!profile) {
     return (
       <main className="page-container" style={{ maxWidth: 32 * 16 }}>
-        <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>
-          门店人员配置（员工池）
-        </h1>
-        <p className="muted-text">请先登录</p>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>门店人员配置（员工池）</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
+        <p className="muted-text">
+          已登录，但未在 users_profile 中查到该账号的角色与门店绑定，请联系总部管理员。
+        </p>
         <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "1rem", display: "inline-flex" }}>
-          返回个人页
+          查看账号信息
         </Link>
       </main>
     );
@@ -302,15 +354,15 @@ export default function StoreStaffPage() {
   if (!isHqOrFinance(profile) && !isManager) {
     return (
       <main className="page-container" style={{ maxWidth: 32 * 16 }}>
-        <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>
-          门店人员配置（员工池）
-        </h1>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>门店人员配置（员工池）</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="msg-error" style={{ marginTop: "0.5rem" }}>
           无权限访问此页
         </p>
-        <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "1rem", display: "inline-flex" }}>
-          返回个人页
-        </Link>
       </main>
     );
   }
@@ -318,9 +370,9 @@ export default function StoreStaffPage() {
   return (
     <main className="page-container" style={{ maxWidth: 32 * 16 }}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
-        <h1 className="heading-1">门店人员配置（员工池）</h1>
-        <Link href="/me" className="btn btn-outline btn-sm">
-          返回个人页
+        <h1 className="heading-1" style={{ marginBottom: 0 }}>门店人员配置（员工池）</h1>
+        <Link href="/" className="btn btn-outline btn-sm">
+          返回主页
         </Link>
       </div>
 

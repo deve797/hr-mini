@@ -103,6 +103,8 @@ async function tryAddToStorePool(
 }
 
 export default function WorkdaysPage() {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [profile, setProfile] = useState<Profile>(null);
   const [storeId, setStoreId] = useState<string>("");
@@ -126,6 +128,12 @@ export default function WorkdaysPage() {
   const [searching, setSearching] = useState(false);
   const [crossStoreSupport, setCrossStoreSupport] = useState(false);
   const [poolAddFailedHint, setPoolAddFailedHint] = useState(false);
+  /** 店长：是否已查询 employees.user_id 本人绑定 */
+  const [linkedSelfChecked, setLinkedSelfChecked] = useState(false);
+  const [linkedSelfEmployee, setLinkedSelfEmployee] = useState<{
+    name: string | null;
+    emp_no: string | null;
+  } | null>(null);
 
   const isManager = isStoreManager(profile);
 
@@ -133,17 +141,34 @@ export default function WorkdaysPage() {
     const { data: authData } = await supabase.auth.getUser();
     const user = authData?.user ?? null;
     if (!user) {
+      setUserId(null);
+      setProfileError(null);
       setProfile(null);
       setStoreId("");
       setStoreName("");
+      setLinkedSelfEmployee(null);
+      setLinkedSelfChecked(false);
       setPageLoading(false);
       return;
     }
-    const { data: profileData } = await supabase
+    setUserId(user.id);
+    const { data: profileData, error: profileErr } = await supabase
       .from("users_profile")
       .select("role, store_id")
       .eq("user_id", user.id)
       .maybeSingle();
+    if (profileErr) {
+      console.error("users_profile 查询失败:", profileErr);
+      setProfileError(profileErr.message);
+      setProfile(null);
+      setStoreId("");
+      setStoreName("");
+      setLinkedSelfEmployee(null);
+      setLinkedSelfChecked(true);
+      setPageLoading(false);
+      return;
+    }
+    setProfileError(null);
     const p: Profile = profileData
       ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null }
       : null;
@@ -157,10 +182,18 @@ export default function WorkdaysPage() {
         .eq("id", p.store_id)
         .maybeSingle();
       setStoreName(storeData?.name ?? "本门店");
+      const { data: linkEmp } = await supabase
+        .from("employees")
+        .select("name, emp_no")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      setLinkedSelfEmployee(linkEmp ?? null);
     } else {
       setStoreId("");
       setStoreName("");
+      setLinkedSelfEmployee(null);
     }
+    setLinkedSelfChecked(true);
     setPageLoading(false);
   }, []);
 
@@ -445,14 +478,26 @@ export default function WorkdaysPage() {
   if (pageLoading) {
     return (
       <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>录入工作天数</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="muted-text">加载中…</p>
       </main>
     );
   }
 
-  if (profile === null) {
+  if (!userId) {
     return (
       <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>录入工作天数</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="body-text" style={{ color: "var(--foreground)" }}>请先登录</p>
         <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "0.5rem", display: "inline-flex" }}>
           返回个人页
@@ -464,9 +509,51 @@ export default function WorkdaysPage() {
     );
   }
 
+  if (profileError) {
+    return (
+      <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>录入工作天数</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
+        <p className="msg-error">查询 users_profile 失败：{profileError}</p>
+        <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "0.5rem", display: "inline-flex" }}>
+          返回个人页
+        </Link>
+      </main>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>录入工作天数</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
+        <p className="body-text" style={{ color: "var(--foreground)" }}>
+          已登录，但未在 users_profile 中查到该账号的角色与门店绑定，请联系总部管理员。
+        </p>
+        <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "0.5rem", display: "inline-flex" }}>
+          查看账号信息
+        </Link>
+      </main>
+    );
+  }
+
   if (!isManager || !storeId) {
     return (
       <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>录入工作天数</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="body-text" style={{ color: "var(--foreground)" }}>
           仅店长可录入工作天数，或你的账号未绑定门店，请联系管理员。
         </p>
@@ -480,7 +567,10 @@ export default function WorkdaysPage() {
   return (
     <main className="page-container" style={{ maxWidth: 32 * 16 }}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
-        <h1 className="heading-1">录入工作天数</h1>
+        <h1 className="heading-1" style={{ marginBottom: 0 }}>录入工作天数</h1>
+        <Link href="/" className="btn btn-outline btn-sm">
+          返回主页
+        </Link>
         <Link href="/insurance" className="btn btn-outline btn-sm">
           投保管理
         </Link>
@@ -488,6 +578,36 @@ export default function WorkdaysPage() {
           员工入职
         </Link>
       </div>
+
+      {isManager && linkedSelfChecked && !linkedSelfEmployee ? (
+        <div
+          className="card"
+          style={{
+            padding: "1rem 1.25rem",
+            marginBottom: "1rem",
+            borderColor: "color-mix(in srgb, var(--secondary) 40%, var(--border))",
+            background: "color-mix(in srgb, var(--secondary) 8%, var(--card-bg))",
+          }}
+          role="region"
+          aria-label="店长本人档案提示"
+        >
+          <p className="body-text" style={{ margin: 0, fontWeight: 600, color: "var(--foreground)" }}>
+            尚未绑定本人员工档案
+          </p>
+          <p className="field-hint" style={{ marginTop: "0.5rem", marginBottom: "0.75rem" }}>
+            参与本人考勤与工资前，请先到「员工入职」填写本人信息并勾选「绑定当前登录账号」，再完成投保；之后可在本页选择本人录入工时。
+          </p>
+          <Link href="/employees/new" className="btn btn-primary btn-sm" style={{ display: "inline-flex" }}>
+            去员工入职
+          </Link>
+        </div>
+      ) : null}
+
+      {isManager && linkedSelfChecked && linkedSelfEmployee ? (
+        <p className="field-hint" style={{ marginBottom: "1rem" }}>
+          本人档案：{linkedSelfEmployee.name ?? "—"}（{linkedSelfEmployee.emp_no ?? "—"}）· 投保通过后在下方选择本人录入工时。
+        </p>
+      ) : null}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         <div className="field">

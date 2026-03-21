@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./insurance.module.css";
@@ -66,6 +68,9 @@ function csvEscape(val: string): string {
 }
 
 export default function InsurancePage() {
+  const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile>(null);
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<RequestRow[]>([]);
@@ -97,14 +102,26 @@ export default function InsurancePage() {
       const { data: authData } = await supabase.auth.getUser();
       const user = authData?.user ?? null;
       if (!user) {
+        setUserId(null);
+        setProfileError(null);
+        setProfile(null);
         setLoading(false);
         return;
       }
-      const { data: profileData } = await supabase
+      setUserId(user.id);
+      const { data: profileData, error: profileErr } = await supabase
         .from("users_profile")
         .select("role, store_id")
         .eq("user_id", user.id)
         .maybeSingle();
+      if (profileErr) {
+        console.error("users_profile 查询失败:", profileErr);
+        setProfileError(profileErr.message);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      setProfileError(null);
       setProfile(
         profileData
           ? { role: profileData.role ?? null, store_id: profileData.store_id ?? null }
@@ -218,6 +235,11 @@ export default function InsurancePage() {
     loadRequests();
   };
 
+  const handleGoHome = () => {
+    router.replace("/");
+    router.refresh();
+  };
+
   if (loading) {
     return (
       <main className={styles.page}>
@@ -227,11 +249,50 @@ export default function InsurancePage() {
     );
   }
 
-  if (!profile) {
+  if (!userId) {
     return (
       <main className={styles.page}>
         <h1 className={styles.title}>总部 · 投保处理</h1>
         <p className={styles.muted}>请先登录</p>
+        <Link href="/login" className="btn btn-primary" style={{ marginTop: "1rem", display: "inline-flex" }}>
+          去登录
+        </Link>
+      </main>
+    );
+  }
+
+  if (profileError) {
+    return (
+      <main className={styles.page}>
+        <div className={styles.pageHeader}>
+          <h1 className={styles.title}>总部 · 投保处理</h1>
+          <button type="button" onClick={handleGoHome} className="btn btn-outline btn-sm">
+            返回主页
+          </button>
+        </div>
+        <p className="msg-error">查询 users_profile 失败：{profileError}</p>
+        <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "1rem", display: "inline-flex" }}>
+          返回个人页
+        </Link>
+      </main>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <main className={styles.page}>
+        <div className={styles.pageHeader}>
+          <h1 className={styles.title}>总部 · 投保处理</h1>
+          <button type="button" onClick={handleGoHome} className="btn btn-outline btn-sm">
+            返回主页
+          </button>
+        </div>
+        <p className={styles.muted}>
+          已登录，但未在 users_profile 中查到该账号的角色与门店绑定，请联系总部管理员。
+        </p>
+        <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "1rem", display: "inline-flex" }}>
+          查看账号信息
+        </Link>
       </main>
     );
   }
@@ -239,7 +300,12 @@ export default function InsurancePage() {
   if (!isHq) {
     return (
       <main className={styles.page}>
-        <h1 className={styles.title}>总部 · 投保处理</h1>
+        <div className={styles.pageHeader}>
+          <h1 className={styles.title}>总部 · 投保处理</h1>
+          <button type="button" onClick={handleGoHome} className="btn btn-outline btn-sm">
+            返回主页
+          </button>
+        </div>
         <p className={styles.noAccess}>无权限</p>
       </main>
     );
@@ -247,7 +313,12 @@ export default function InsurancePage() {
 
   return (
     <main className={styles.page}>
-      <h1 className={styles.title}>总部 · 投保处理</h1>
+      <div className={styles.pageHeader}>
+        <h1 className={styles.title}>总部 · 投保处理</h1>
+        <button type="button" onClick={handleGoHome} className="btn btn-outline btn-sm">
+          返回主页
+        </button>
+      </div>
 
       <div className={styles.tabs}>
         {statusTabs.map((tab) => (

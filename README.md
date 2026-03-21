@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HR Mini
 
-## Getting Started
+人事管理（Next.js App Router + Supabase）。
 
-First, run the development server:
+## 环境要求
+
+- Node.js（与 Next 16 兼容的版本）
+- **包管理：仅使用 npm**（勿用 pnpm/yarn 锁文件）
+
+## 配置 Supabase
+
+1. 复制环境变量模板：
+
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. 在 [.env.example](.env.example) 中列出的键名对应填入 Supabase 项目 **Project Settings → API** 中的值：
+
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+3. 不要将 `.env.local` 提交到 Git。
+
+## 本地开发
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+默认开发地址：<http://localhost:3000>（若端口占用，Next 会选用其他端口，以终端输出为准）。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 构建与生产启动
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm run start
+```
 
-## Learn More
+## RLS 与安全
 
-To learn more about Next.js, take a look at the following resources:
+数据库行级安全策略请在 Supabase Dashboard 中核对，详见 [docs/supabase-rls-checklist.md](docs/supabase-rls-checklist.md)。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 关键路由（App Router）
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+页面位于 `app/**/page.tsx`，例如：`/`、`/login`、`/me`、`/employees/new`、`/insurance-request`、`/store-staff`、`/workdays`、`/dashboard`、`/insurance`、`/payroll`。
 
-## Deploy on Vercel
+## 网络与 VPN
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+若浏览器无法连接 Supabase：检查 DNS、系统/浏览器代理、以及是否能解析 `*.supabase.co` 域名。

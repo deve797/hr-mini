@@ -61,11 +61,27 @@
 }
 
 .welcomeImageSlot {
+  position: relative;
   flex-shrink: 0;
   width: 4rem;
   height: 4rem;
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--border) 30%, transparent);
+  border-radius: 50%;
+  overflow: hidden;
+  background: linear-gradient(
+    155deg,
+    color-mix(in srgb, var(--primary) 9%, var(--muted)) 0%,
+    color-mix(in srgb, var(--secondary) 6%, var(--muted)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--primary) 14%, transparent);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.welcomeLogo {
+  object-fit: cover;
+  object-position: center;
+  /* 浅色、低对比，贴近卡片与主色体系 */
+  filter: saturate(0.72) brightness(1.18) contrast(0.92) hue-rotate(-12deg);
+  opacity: 0.88;
 }
 
 .intro {
@@ -139,6 +155,39 @@
   border: 1px dashed color-mix(in srgb, var(--border) 55%, transparent);
   color: var(--muted-foreground);
   background: color-mix(in srgb, var(--card-bg) 92%, transparent);
+}
+
+.managerFlow {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, transparent);
+  background: color-mix(in srgb, var(--primary) 12%, var(--card-bg));
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--foreground);
+}
+
+.managerFlowTitle {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--foreground);
+}
+
+.managerFlow ol {
+  margin: 0.5rem 0 0 1.25rem;
+  padding: 0;
+  color: var(--muted-foreground);
+}
+
+.managerFlowWarn {
+  border-color: color-mix(in srgb, var(--secondary) 45%, transparent);
+  background: color-mix(in srgb, var(--secondary) 10%, var(--card-bg));
+}
+
+.managerFlowOk {
+  border-color: color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
 .actions {

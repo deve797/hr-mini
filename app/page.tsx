@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -22,6 +23,21 @@ function getRedirectMessage(role: string | null): string {
   if (role === "hq") return "正在进入总部工作台…";
   if (role === "finance") return "正在进入财务工作台…";
   return "正在进入工作台…";
+}
+
+function WelcomeBrandMark() {
+  return (
+    <div className={styles.welcomeImageSlot} aria-hidden>
+      <Image
+        src="/brand-zuolinyouguo.png"
+        alt=""
+        fill
+        sizes="64px"
+        className={styles.welcomeLogo}
+        priority
+      />
+    </div>
+  );
 }
 
 export default function Home() {
@@ -93,7 +109,7 @@ export default function Home() {
             <span className={styles.welcomeLine1}>欢迎来到左林右果</span>
             <span className={styles.welcomeLine2}>人事管理系统</span>
           </div>
-          <div className={styles.welcomeImageSlot} aria-hidden />
+          <WelcomeBrandMark />
         </header>
         <div className={styles.intro}>
           <h1>HR Mini</h1>

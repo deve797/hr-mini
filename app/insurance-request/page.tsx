@@ -67,6 +67,8 @@ export default function InsuranceRequestPage() {
     const { data: authData } = await supabase.auth.getUser();
     const user = authData?.user ?? null;
     if (!user) {
+      setUserId(null);
+      setEmail(null);
       setLoading(false);
       return;
     }
@@ -206,17 +208,66 @@ export default function InsuranceRequestPage() {
   if (loading) {
     return (
       <main className="page-container" style={{ maxWidth: 32 * 16 }}>
-        <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>投保申请</h1>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>投保申请</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="muted-text">加载中...</p>
       </main>
     );
   }
 
-  if (!profile && !profileError) {
+  if (!userId) {
     return (
       <main className="page-container" style={{ maxWidth: 32 * 16 }}>
-        <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>投保申请</h1>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>投保申请</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="muted-text">请先登录</p>
+        <Link href="/login" className="btn btn-primary" style={{ marginTop: "0.75rem", display: "inline-flex" }}>
+          去登录
+        </Link>
+      </main>
+    );
+  }
+
+  if (profileError) {
+    return (
+      <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>投保申请</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
+        <p className="msg-error">查询 users_profile 失败：{profileError}</p>
+        <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "1rem", display: "inline-flex" }}>
+          返回个人页
+        </Link>
+      </main>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <main className="page-container" style={{ maxWidth: 32 * 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>投保申请</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
+        <p className="muted-text">
+          已登录，但未在 users_profile 中查到该账号的角色与门店绑定，请联系总部管理员。
+        </p>
+        <Link href="/me" className="btn btn-ghost btn-sm" style={{ marginTop: "1rem", display: "inline-flex" }}>
+          查看账号信息
+        </Link>
       </main>
     );
   }
@@ -224,7 +275,12 @@ export default function InsuranceRequestPage() {
   if (!isStoreManager) {
     return (
       <main className="page-container" style={{ maxWidth: 32 * 16 }}>
-        <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>投保申请</h1>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <h1 className="heading-1" style={{ marginBottom: 0 }}>投保申请</h1>
+          <Link href="/" className="btn btn-outline btn-sm">
+            返回主页
+          </Link>
+        </div>
         <p className="msg-error" style={{ marginTop: "0.5rem" }}>无权限</p>
         <Link
           href="/me"
@@ -242,7 +298,15 @@ export default function InsuranceRequestPage() {
 
   return (
     <main className="page-container" style={{ maxWidth: 32 * 16 }}>
-      <h1 className="heading-1" style={{ marginBottom: "0.75rem" }}>投保申请</h1>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem" }}>
+        <h1 className="heading-1" style={{ marginBottom: 0 }}>投保申请</h1>
+        <Link href="/" className="btn btn-outline btn-sm">
+          返回主页
+        </Link>
+      </div>
+      <p className="field-hint" style={{ marginBottom: "1.25rem" }}>
+        顺序建议：先「员工入职」建档（本人需勾选绑定登录账号）→ 在此提交投保 → 总部处理后「录入工作天数」。
+      </p>
 
       <section
         className="card"
