@@ -78,12 +78,14 @@ export default function LoginPage() {
         {msg}
       </p>
 
-      <div className="muted-text" style={{ marginTop: "1.5rem", fontSize: "0.8125rem", lineHeight: 1.6 }}>
-        <p>提示：账号请在 Supabase Dashboard → Authentication → Users 创建并设置密码。</p>
-        <p style={{ marginTop: "0.5rem" }}>
-          店长账号还需在表 users_profile 中有一行：user_id=该用户 UUID，role=store_manager，store_id=所属门店 UUID。并执行 <code>scripts/users_profile_rls.sql</code> 确保可读自己的 profile。
-        </p>
-      </div>
+      {process.env.NODE_ENV === "development" ? (
+        <div className="muted-text" style={{ marginTop: "1.5rem", fontSize: "0.8125rem", lineHeight: 1.6 }}>
+          <p>提示：账号请在 Supabase Dashboard → Authentication → Users 创建并设置密码。</p>
+          <p style={{ marginTop: "0.5rem" }}>
+            店长账号还需在表 users_profile 中有一行：user_id=该用户 UUID，role=store_manager，store_id=所属门店 UUID。并执行 <code>scripts/users_profile_rls.sql</code> 确保可读自己的 profile。
+          </p>
+        </div>
+      ) : null}
     </main>
   );
 }
