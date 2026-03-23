@@ -4,6 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
+function safeInternalPath(raw: string | null): string | null {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -22,18 +27,32 @@ export default function LoginPage() {
       const isEmailNotConfirmed =
         code === "email_not_confirmed" ||
         error.message?.toLowerCase().includes("email not confirmed");
-      let hint = "";
-      if (isInvalidCreds)
-        hint =
-          " 请确认：1) 该用户已在 Supabase → Authentication → Users 中存在；2) 密码正确。";
-      else if (isEmailNotConfirmed)
-        hint =
-          " 请在 Supabase → Authentication → Users 中点击该用户，勾选 Email 已确认；或到 Authentication → Providers → Email 关闭 “Confirm email”。";
-      setMsg(`登录失败 [${code || "—"}]: ${error.message}${hint}`);
+
+      if (process.env.NODE_ENV === "development") {
+        let hint = "";
+        if (isInvalidCreds)
+          hint =
+            " 请确认：1) 该用户已在 Supabase → Authentication → Users 中存在；2) 密码正确。";
+        else if (isEmailNotConfirmed)
+          hint =
+            " 请在 Supabase → Authentication → Users 中点击该用户，勾选 Email 已确认；或到 Authentication → Providers → Email 关闭 “Confirm email”。";
+        setMsg(`登录失败 [${code || "—"}]: ${error.message}${hint}`);
+        return;
+      }
+
+      if (isEmailNotConfirmed) {
+        setMsg("登录失败：邮箱尚未完成验证。请查收验证邮件或联系管理员。");
+        return;
+      }
+      setMsg("登录失败：邮箱或密码不正确。如仍无法登录，请联系管理员。");
       return;
     }
     setMsg("登录成功，跳转中...");
-    router.push("/dashboard");
+    const next =
+      typeof window !== "undefined"
+        ? safeInternalPath(new URLSearchParams(window.location.search).get("next"))
+        : null;
+    router.push(next ?? "/dashboard");
   };
 
   return (

@@ -2,6 +2,8 @@
 
 在 **Supabase Dashboard → Authentication / Table Editor → Policies** 中按表核对。以下为与本应用前端假设一致的检查项；具体 policy SQL 需按你库中的列名与 `users_profile` 结构微调。
 
+**抽检怎么操作**：见 [rls-spot-check-procedure.md](rls-spot-check-procedure.md)（用不同角色账号验证拒绝越权）。
+
 ## 1. `users_profile`
 
 - [ ] 用户仅能 `SELECT` 自己的 `user_id = auth.uid()` 行（或等价 JWT claim）。

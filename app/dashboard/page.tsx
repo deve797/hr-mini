@@ -20,6 +20,14 @@ function isStoreManager(profile: Profile): boolean {
   return profile?.role === "store_manager" && !!profile?.store_id;
 }
 
+/** 与首页 `app/page.tsx` 的 `isValidRole` 保持一致 */
+function isValidRole(profile: Profile): boolean {
+  if (!profile || !profile.role) return false;
+  const r = profile.role;
+  if (r === "store_manager") return !!profile.store_id;
+  return r === "hq" || r === "finance";
+}
+
 function WelcomeBrandMark() {
   return (
     <div className={styles.welcomeImageSlot} aria-hidden>
@@ -194,6 +202,33 @@ export default function DashboardPage() {
             <Link href="/login" className={styles.primaryLink}>
               去登录
             </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!isValidRole(profile)) {
+    return (
+      <div className={styles.page}>
+        <main className={styles.main}>
+          <header className={styles.welcomeHeader}>
+            <div className={styles.welcomeText}>
+              <span className={styles.welcomeLine1}>欢迎来到左林右果</span>
+              <span className={styles.welcomeLine2}>人事管理系统</span>
+            </div>
+            <WelcomeBrandMark />
+          </header>
+          <div className={styles.intro}>
+            <h1>工作台</h1>
+            <p className="msg-error">
+              账号已登录，但未配置可用权限，请联系总部管理员。
+            </p>
+          </div>
+          <div className={styles.actions}>
+            <button type="button" onClick={handleSignOut} className={styles.secondaryButton}>
+              退出登录
+            </button>
           </div>
         </main>
       </div>

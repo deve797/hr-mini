@@ -73,13 +73,6 @@ export default function PayrollPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
 
-  useEffect(() => {
-    (async () => {
-      const res = await supabase.auth.getUser();
-      console.log("当前登录用户：", res.data.user);
-    })();
-  }, []);
-
   const loadBase = async () => {
     setMsg("加载基础数据...");
     const [empRes, storeRes] = await Promise.all([
@@ -252,7 +245,7 @@ export default function PayrollPage() {
 
       <section style={{ marginTop: "1.25rem" }}>
         <h2 className="heading-2" style={{ marginBottom: "0.375rem" }}>
-          工资总表 payroll_month
+          工资总表
         </h2>
         <p className="field-hint" style={{ marginBottom: "0.5rem" }}>
           说明：你可以先手录绩效/奖金/调整项，保存后再点“运行工资计算”让总额与门店分摊更新。
@@ -277,7 +270,7 @@ export default function PayrollPage() {
               {rows.length === 0 ? (
                 <tr>
                   <td className={styles.td} colSpan={9}>
-                    本月暂无工资数据。你可以先录入 workdays，然后点“运行工资计算”生成。
+                    本月暂无工资数据。可先在各店录入本月工时，再点“运行工资计算”生成。
                   </td>
                 </tr>
               ) : (
@@ -349,7 +342,7 @@ export default function PayrollPage() {
 
       <section style={{ marginTop: "1.5rem" }}>
         <h2 className="heading-2" style={{ marginBottom: "0.375rem" }}>
-          门店分摊 payroll_store_split
+          门店分摊
         </h2>
         <p className="field-hint" style={{ marginBottom: "0.5rem" }}>
           点击上面员工姓名可查看该员工在各门店的分摊明细。
@@ -398,7 +391,7 @@ export default function PayrollPage() {
       </section>
 
       <p className="field-hint" style={{ marginTop: "1rem" }}>
-        提示：如果某些表因为 RLS 导致读取失败，你会在页面看到错误信息。我们下一步会统一配置最小可用的权限策略。
+        若加载失败或无法保存，页面会显示具体原因；无法自行处理时请把提示原文发给管理员。
       </p>
     </main>
   );
