@@ -919,6 +919,7 @@ export default function NewEmployeePage() {
                     <th>系统状态</th>
                     <th>当前门店</th>
                     <th>创建时间</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -930,6 +931,13 @@ export default function NewEmployeePage() {
                       <td>{row.system_status ?? "—"}</td>
                       <td>{row.stores?.name ?? "—"}</td>
                       <td>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}</td>
+                      <td>
+                        {(isHq(profile) || isStoreManager(profile)) && (
+                          <Link href={`/employees/${row.id}/edit`} className="btn btn-ghost btn-sm">
+                            编辑
+                          </Link>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
