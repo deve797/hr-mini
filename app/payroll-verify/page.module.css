@@ -1,5 +1,5 @@
 .wrap {
-  max-width: 64rem;
+  max-width: 100rem;
 }
 
 .toolbar {
@@ -19,7 +19,7 @@
 
 .table {
   width: 100%;
-  min-width: 720px;
+  min-width: 1360px;
   border-collapse: collapse;
   font-family: var(--font-body);
   font-size: 0.8125rem;

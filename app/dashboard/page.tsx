@@ -139,6 +139,12 @@ export default function DashboardPage() {
           href: "/payroll",
         },
         {
+          key: "payroll-performance",
+          title: "绩效 / 门店奖金",
+          description: "录入员工绩效与各门店奖金，算薪时自动汇入工资",
+          href: "/payroll-performance",
+        },
+        {
           key: "store-staff",
           title: "门店人员配置",
           description: "查看与管理门店员工池",

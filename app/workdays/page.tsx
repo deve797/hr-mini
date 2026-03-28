@@ -24,6 +24,8 @@ type MonthlyWorkdayRow = {
   workdays: number;
   trial_days?: number;
   regular_days?: number;
+  overtime_hours?: number;
+  days_reaching_12h?: number;
   created_at: string;
   employees: { name: string | null; emp_no?: string | null } | null;
 };
@@ -112,6 +114,13 @@ export default function WorkdaysPage() {
   const [month, setMonth] = useState(() => getCurrentMonthFirst());
   const [employeeId, setEmployeeId] = useState("");
   const [workdays, setWorkdays] = useState("");
+  const [overtimeHours, setOvertimeHours] = useState("0");
+  const [daysReaching12h, setDaysReaching12h] = useState("0");
+  const [selectedEmployeeWorkShift, setSelectedEmployeeWorkShift] = useState<number | null>(null);
+  const [selectedEmployeeStatus, setSelectedEmployeeStatus] = useState<string | null>(null);
+  const [midMonthConversion, setMidMonthConversion] = useState(false);
+  const [trialDaysInput, setTrialDaysInput] = useState("0");
+  const [regularDaysInput, setRegularDaysInput] = useState("0");
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState<"info" | "error" | "success">("info");
   const [selectedEmployeeInsured, setSelectedEmployeeInsured] = useState<boolean | null>(null);
@@ -205,7 +214,7 @@ export default function WorkdaysPage() {
     setMonthlyListLoading(true);
     const { data, error } = await supabase
       .from("monthly_workdays")
-      .select("id, month, store_id, employee_id, workdays, trial_days, regular_days, created_at, employees(name, emp_no)")
+      .select("id, month, store_id, employee_id, workdays, trial_days, regular_days, overtime_hours, days_reaching_12h, created_at, employees(name, emp_no)")
       .eq("store_id", storeId)
       .eq("month", month)
       .order("created_at", { ascending: false });
@@ -330,6 +339,37 @@ export default function WorkdaysPage() {
     })();
   }, [employeeId, month]);
 
+  /** 选中员工时查询其 work_shift 和 employment_status */
+  useEffect(() => {
+    if (!employeeId) {
+      setSelectedEmployeeWorkShift(null);
+      setSelectedEmployeeStatus(null);
+      setDaysReaching12h("0");
+      setMidMonthConversion(false);
+      setTrialDaysInput("0");
+      setRegularDaysInput("0");
+      return;
+    }
+    supabase
+      .from("employees")
+      .select("work_shift, employment_status")
+      .eq("id", employeeId)
+      .maybeSingle()
+      .then(({ data }) => {
+        const empRecord = data as { work_shift?: number | null; employment_status?: string | null } | null;
+        const shift = empRecord ? Number(empRecord.work_shift ?? 0) : null;
+        setSelectedEmployeeWorkShift(shift);
+        if (shift === 12) setDaysReaching12h("0");
+        const empStatus = empRecord?.employment_status ?? null;
+        setSelectedEmployeeStatus(empStatus);
+        if (empStatus !== "试用期") {
+          setMidMonthConversion(false);
+          setTrialDaysInput("0");
+          setRegularDaysInput("0");
+        }
+      });
+  }, [employeeId]);
+
   const showMsg = (text: string, type: "info" | "error" | "success") => {
     setMsg(text);
     setMsgType(type);
@@ -348,14 +388,37 @@ export default function WorkdaysPage() {
       showMsg("请选择月份", "error");
       return;
     }
-    const daysNum = Number(workdays);
-    if (workdays === "" || Number.isNaN(daysNum)) {
-      showMsg("请填写有效的工作天数", "error");
-      return;
-    }
-    if (daysNum < 0 || daysNum > 31) {
-      showMsg("工作天数须在 0～31 之间", "error");
-      return;
+    let daysNum: number;
+    let trial_days: number;
+    let regular_days: number;
+
+    if (midMonthConversion) {
+      const trialNum = Math.max(0, Math.floor(Number(trialDaysInput) || 0));
+      const regularNum = Math.max(0, Math.floor(Number(regularDaysInput) || 0));
+      if (trialNum === 0 && regularNum === 0) {
+        showMsg("月中转正模式下，试用期天数和转正天数不能都为 0", "error");
+        return;
+      }
+      if (trialNum + regularNum > 31) {
+        showMsg("试用期天数 + 转正天数合计须在 0～31 之间", "error");
+        return;
+      }
+      daysNum = trialNum + regularNum;
+      trial_days = trialNum;
+      regular_days = regularNum;
+    } else {
+      daysNum = Number(workdays);
+      if (workdays === "" || Number.isNaN(daysNum)) {
+        showMsg("请填写有效的工作天数", "error");
+        return;
+      }
+      if (daysNum < 0 || daysNum > 31) {
+        showMsg("工作天数须在 0～31 之间", "error");
+        return;
+      }
+      const isTrial = selectedEmployeeStatus === "试用期";
+      trial_days = isTrial ? daysNum : 0;
+      regular_days = isTrial ? 0 : daysNum;
     }
 
     const isInsured = await checkInsuredForMonth(employeeId, month);
@@ -363,16 +426,6 @@ export default function WorkdaysPage() {
       showMsg("该员工在该月没有购买意外险，不能输入考勤", "error");
       return;
     }
-
-    const { data: empData } = await supabase
-      .from("employees")
-      .select("employment_status")
-      .eq("id", employeeId)
-      .maybeSingle();
-    const empStatus = (empData as { employment_status?: string } | null)?.employment_status ?? "转正";
-    const isTrial = empStatus === "试用期";
-    const trial_days = isTrial ? daysNum : 0;
-    const regular_days = isTrial ? 0 : daysNum;
 
     showMsg("提交中...", "info");
 
@@ -383,13 +436,31 @@ export default function WorkdaysPage() {
     const onSuccess = () => {
       setPoolAddFailedHint(false);
       tryAddToStorePool(storeId, employeeId, () => setPoolAddFailedHint(true));
-      showMsg("已提交", "success");
+      showMsg(
+        "已提交。请通知财务对该月重新运行工资计算，以同步本次出勤修改。",
+        "success"
+      );
       loadMonthlyList();
       setWorkdays("");
+      setOvertimeHours("0");
+      setDaysReaching12h("0");
+      setMidMonthConversion(false);
+      setTrialDaysInput("0");
+      setRegularDaysInput("0");
       setEmployeeId("");
     };
 
-    const payload = { workdays: daysNum, trial_days, regular_days };
+    const overtimeHoursNum = Math.max(0, Number(overtimeHours) || 0);
+    const daysReaching12hNum = selectedEmployeeWorkShift === 12
+      ? 0
+      : Math.max(0, Math.min(daysNum, Math.floor(Number(daysReaching12h) || 0)));
+    const payload = {
+      workdays: daysNum,
+      trial_days,
+      regular_days,
+      overtime_hours: overtimeHoursNum,
+      days_reaching_12h: daysReaching12hNum,
+    };
 
     if (existing) {
       const { error: updateError } = await supabase
@@ -452,8 +523,23 @@ export default function WorkdaysPage() {
 
   const fillFormForEdit = (row: MonthlyWorkdayRow) => {
     setEmployeeId(row.employee_id);
-    const total = row.workdays ?? (row.trial_days ?? 0) + (row.regular_days ?? 0);
-    setWorkdays(String(total));
+    const trialD = row.trial_days ?? 0;
+    const regularD = row.regular_days ?? 0;
+    const isMidMonth = trialD > 0 && regularD > 0;
+    if (isMidMonth) {
+      setMidMonthConversion(true);
+      setTrialDaysInput(String(trialD));
+      setRegularDaysInput(String(regularD));
+      setWorkdays("");
+    } else {
+      setMidMonthConversion(false);
+      setTrialDaysInput("0");
+      setRegularDaysInput("0");
+      const total = row.workdays ?? trialD + regularD;
+      setWorkdays(String(total));
+    }
+    setOvertimeHours(String(row.overtime_hours ?? 0));
+    setDaysReaching12h(String(row.days_reaching_12h ?? 0));
   };
 
   const removeRecord = async (id: string) => {
@@ -578,6 +664,10 @@ export default function WorkdaysPage() {
           员工入职
         </Link>
       </div>
+
+      <p className="field-hint" style={{ marginBottom: "1rem", maxWidth: "42rem" }}>
+        修改或补录出勤并保存后，工资不会自动更新；请通知财务在「工资与分摊」中对所选月份点击「运行工资计算（含分摊）」，才会按新出勤重算工资与门店分摊。
+      </p>
 
       {isManager && linkedSelfChecked && !linkedSelfEmployee ? (
         <div
@@ -705,20 +795,118 @@ export default function WorkdaysPage() {
           </div>
         )}
 
+        {selectedEmployeeStatus === "试用期" && (
+          <div className="field">
+            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem" }}>
+              <input
+                type="checkbox"
+                checked={midMonthConversion}
+                onChange={(e) => {
+                  setMidMonthConversion(e.target.checked);
+                  if (!e.target.checked) {
+                    setTrialDaysInput("0");
+                    setRegularDaysInput("0");
+                  } else {
+                    setWorkdays("");
+                  }
+                }}
+                disabled={selectedEmployeeInsured === false}
+                style={{ width: "1rem", height: "1rem" }}
+              />
+              <span>本月有月中转正（同一个月内既有试用期出勤又有转正后出勤）</span>
+            </label>
+          </div>
+        )}
+
+        {midMonthConversion ? (
+          <>
+            <div className="field">
+              <label className="field-label">试用期出勤天数</label>
+              <input
+                type="number"
+                placeholder="0～31"
+                min={0}
+                max={31}
+                value={trialDaysInput}
+                onChange={(e) => setTrialDaysInput(e.target.value)}
+                disabled={selectedEmployeeInsured === false}
+                className="input"
+                style={{ opacity: selectedEmployeeInsured === false ? 0.6 : 1, maxWidth: "10rem" }}
+              />
+            </div>
+            <div className="field">
+              <label className="field-label">转正后出勤天数</label>
+              <input
+                type="number"
+                placeholder="0～31"
+                min={0}
+                max={31}
+                value={regularDaysInput}
+                onChange={(e) => setRegularDaysInput(e.target.value)}
+                disabled={selectedEmployeeInsured === false}
+                className="input"
+                style={{ opacity: selectedEmployeeInsured === false ? 0.6 : 1, maxWidth: "10rem" }}
+              />
+              <p className="field-hint">
+                两项合计为本月总出勤天数（≤31）。转正日期请同步在「员工信息」中更新为「转正」状态。
+              </p>
+            </div>
+          </>
+        ) : (
+          <div className="field">
+            <label className="field-label">工作天数</label>
+            <input
+              type="number"
+              placeholder="0～31"
+              min={0}
+              max={31}
+              value={workdays}
+              onChange={(e) => setWorkdays(e.target.value)}
+              disabled={selectedEmployeeInsured === false}
+              className="input"
+              style={{ opacity: selectedEmployeeInsured === false ? 0.6 : 1 }}
+            />
+          </div>
+        )}
+
         <div className="field">
-          <label className="field-label">工作天数</label>
+          <label className="field-label">加班小时数（本店本月合计）</label>
           <input
             type="number"
-            placeholder="0～31"
+            placeholder="0"
             min={0}
-            max={31}
-            value={workdays}
-            onChange={(e) => setWorkdays(e.target.value)}
+            max={999}
+            step={0.5}
+            value={overtimeHours}
+            onChange={(e) => setOvertimeHours(e.target.value)}
             disabled={selectedEmployeeInsured === false}
             className="input"
-            style={{ opacity: selectedEmployeeInsured === false ? 0.6 : 1 }}
+            style={{ opacity: selectedEmployeeInsured === false ? 0.6 : 1, maxWidth: "10rem" }}
           />
+          <p className="field-hint">如本月无加班填 0；支持小数（如 1.5 表示 1.5 小时）</p>
         </div>
+
+        {selectedEmployeeWorkShift !== null && selectedEmployeeWorkShift !== 12 && (
+          <div className="field">
+            <label className="field-label">本月达到 12 小时的天数</label>
+            <input
+              type="number"
+              placeholder="0"
+              min={0}
+              max={31}
+              step={1}
+              value={daysReaching12h}
+              onChange={(e) => setDaysReaching12h(e.target.value)}
+              disabled={selectedEmployeeInsured === false}
+              className="input"
+              style={{ opacity: selectedEmployeeInsured === false ? 0.6 : 1, maxWidth: "10rem" }}
+            />
+            <p className="field-hint">
+              该员工为 {selectedEmployeeWorkShift} 小时班制（标准 1 餐/天）。
+              如当天加班后工作时长达到 12 小时，填写天数，系统会多补 1 餐（10元）。
+            </p>
+          </div>
+        )}
 
         <button
           type="button"
@@ -769,7 +957,19 @@ export default function WorkdaysPage() {
                         ? `${row.employees.name ?? "未知"} (${row.employees.emp_no})`
                         : (row.employees?.name ?? "未知")}
                     </span>
-                    <span className="muted-text" style={{ marginLeft: "0.5rem" }}>{row.workdays ?? (row.trial_days ?? 0) + (row.regular_days ?? 0)} 天</span>
+                    {(row.trial_days ?? 0) > 0 && (row.regular_days ?? 0) > 0 ? (
+                      <span className="muted-text" style={{ marginLeft: "0.5rem" }}>
+                        {(row.trial_days ?? 0) + (row.regular_days ?? 0)} 天（试用 {row.trial_days} + 转正 {row.regular_days}）
+                      </span>
+                    ) : (
+                      <span className="muted-text" style={{ marginLeft: "0.5rem" }}>{row.workdays ?? (row.trial_days ?? 0) + (row.regular_days ?? 0)} 天</span>
+                    )}
+                    {(row.overtime_hours ?? 0) > 0 && (
+                      <span className="muted-text" style={{ marginLeft: "0.5rem" }}>· 加班 {row.overtime_hours} h</span>
+                    )}
+                    {(row.days_reaching_12h ?? 0) > 0 && (
+                      <span className="muted-text" style={{ marginLeft: "0.5rem" }}>· 达12h {row.days_reaching_12h} 天</span>
+                    )}
                     <div className="field-hint" style={{ marginTop: "0.25rem" }}>
                       更新于 {new Date(row.created_at).toLocaleString("zh-CN")}
                     </div>

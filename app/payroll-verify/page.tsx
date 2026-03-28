@@ -14,10 +14,17 @@ type PayrollRow = {
   month: string;
   employee_id: string;
   total_days: number;
-  gross_total: number;
-  performance_manual: number;
-  bonus_manual: number;
+  base_pay: number;
+  position_pay: number;
+  subsidy_pay: number;
+  meal_allowance_total: number;
+  attendance_bonus: number;
+  overtime_hours_total: number;
+  overtime_pay: number;
+  performance_total: number;
+  store_bonus_total: number;
   adjustment_manual: number;
+  gross_total: number;
   store_approved_at: string | null;
 };
 
@@ -113,7 +120,7 @@ export default function PayrollVerifyPage() {
     const ids = empList.map((e) => e.id);
     const { data: payrollData, error: payrollErr } = await supabase
       .from("payroll_month")
-      .select("id,month,employee_id,total_days,gross_total,performance_manual,bonus_manual,adjustment_manual,store_approved_at")
+      .select("id,month,employee_id,total_days,base_pay,position_pay,subsidy_pay,meal_allowance_total,attendance_bonus,overtime_hours_total,overtime_pay,performance_total,store_bonus_total,adjustment_manual,gross_total,store_approved_at")
       .eq("month", month)
       .in("employee_id", ids)
       .order("gross_total", { ascending: false });
@@ -257,18 +264,24 @@ export default function PayrollVerifyPage() {
               <tr>
                 <th className={styles.th}>员工</th>
                 <th className={styles.th}>天数</th>
+                <th className={styles.th}>基本工资</th>
+                <th className={styles.th}>岗位工资</th>
+                <th className={styles.th}>补贴</th>
+                <th className={styles.th}>餐补</th>
+                <th className={styles.th}>全勤奖</th>
+                <th className={styles.th}>加班费</th>
+                <th className={styles.th}>绩效</th>
+                <th className={styles.th}>门店奖金</th>
+                <th className={styles.th}>调整</th>
                 <th className={styles.th}>总工资</th>
-                <th className={styles.th}>绩效(手录)</th>
-                <th className={styles.th}>奖金(手录)</th>
-                <th className={styles.th}>调整(手录)</th>
-                <th className={styles.th}>店长审核</th>
+                <th className={styles.th}>审核</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td className={styles.td} colSpan={7}>
-                    本店该月暂无工资数据；请由财务先运行工资计算并填写绩效/奖金。
+                  <td className={styles.td} colSpan={13}>
+                    本店该月暂无工资数据；请由财务先运行工资计算。
                   </td>
                 </tr>
               ) : (
@@ -276,10 +289,25 @@ export default function PayrollVerifyPage() {
                   <tr key={r.id}>
                     <td className={styles.td}>{empName(r.employee_id)}</td>
                     <td className={styles.td}>{r.total_days}</td>
-                    <td className={styles.td}>{Number(r.gross_total).toFixed(2)}</td>
-                    <td className={styles.td}>{r.performance_manual}</td>
-                    <td className={styles.td}>{r.bonus_manual}</td>
-                    <td className={styles.td}>{r.adjustment_manual}</td>
+                    <td className={styles.td}>{Number(r.base_pay).toFixed(2)}</td>
+                    <td className={styles.td}>{Number(r.position_pay).toFixed(2)}</td>
+                    <td className={styles.td}>{Number(r.subsidy_pay).toFixed(2)}</td>
+                    <td className={styles.td}>{Number(r.meal_allowance_total).toFixed(2)}</td>
+                    <td className={styles.td}>{Number(r.attendance_bonus).toFixed(2)}</td>
+                    <td className={styles.td} title={`加班 ${Number(r.overtime_hours_total)} 小时`}>
+                      {Number(r.overtime_pay).toFixed(2)}
+                      {Number(r.overtime_hours_total) > 0 && (
+                        <span style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginLeft: "0.25rem" }}>
+                          ({Number(r.overtime_hours_total)}h)
+                        </span>
+                      )}
+                    </td>
+                    <td className={styles.td}>{Number(r.performance_total).toFixed(2)}</td>
+                    <td className={styles.td}>{Number(r.store_bonus_total).toFixed(2)}</td>
+                    <td className={styles.td}>{Number(r.adjustment_manual).toFixed(2)}</td>
+                    <td className={styles.td} style={{ fontWeight: 600 }}>
+                      {Number(r.gross_total).toFixed(2)}
+                    </td>
                     <td className={styles.td}>
                       {r.store_approved_at ? "已审核" : "待审核"}
                     </td>
